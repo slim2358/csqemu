@@ -1,4 +1,4 @@
-  ----- 10/29/2023b -----
+  ----- 10/29/2023 -----
 
   GITHUB account/repo created.
   The only branch is "main".
@@ -11,3 +11,9 @@
     1)  How to share this account/repo.
     2)  How to access w/o the TOKEN
     3)  Btw CLONE works w/o authorisation - no password requet.
+
+
+  ----- 10/30/2023 -----
+
+ Tried to access with SSH ( not HTTPS).
+ Generfated PUBLIC KEY and posted it on github account
