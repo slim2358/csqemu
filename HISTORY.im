@@ -17,3 +17,12 @@
 
  Tried to access with SSH ( not HTTPS).
  Generfated PUBLIC KEY and posted it on github account
+
+ ----- 11/01/2023 -----
+
+Created DOCKER file with all tools and packages installed needed to build
+QEMU inside DOCKER.
+
+The DOCKER is pushed to hub.docker.com 
+
+   slyubski/bldq:10.0.1
