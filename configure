@@ -1069,6 +1069,8 @@ fi
 
 ##########################################
 
+library="no"
+
 if test -z "${target_list+xxx}" ; then
     default_targets=yes
     for target in $default_target_list; do
@@ -1083,6 +1085,10 @@ else
         # friendly error message than if we let it fall through.
         case " $default_target_list " in
             *" $target "*)
+                if test "$target" = "riscv64-lib-softmmu" ; then
+                    pie="no"
+                    library="yes"
+                fi
                 ;;
             *)
                 error_exit "Unknown target name '$target'"
@@ -1783,6 +1789,7 @@ if test "$skip_meson" = no; then
   test "$default_feature" = no && meson_option_add -Dauto_features=disabled
   test "$static" = yes && meson_option_add -Dprefer_static=true
   test "$pie" = no && meson_option_add -Db_pie=false
+  test "$library" = yes && meson_option_add "-Dis_library=true"
 
   # QEMU options
   test "$cfi" != false && meson_option_add "-Dcfi=$cfi" "-Db_lto=$cfi"
