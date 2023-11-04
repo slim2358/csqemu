@@ -1,1 +1,0 @@
-/home/srozhkov/develop/csqemu/Makefile
