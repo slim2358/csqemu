@@ -341,7 +341,12 @@ foreach dir : target_dirs
   endif
 
   target_base = dir.split('-')[0]
-  qtest_emulator = emulators['qemu-system-' + target_base]
+  if get_option('is_library')
+     ext='.so'
+  else
+     ext=''
+  endif
+  qtest_emulator = emulators['qemu-system-' + target_base + ext]
   target_qtests = get_variable('qtests_' + target_base, []) + qtests_generic
 
   test_deps = roms
