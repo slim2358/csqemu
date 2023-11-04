@@ -26,3 +26,8 @@ QEMU inside DOCKER.
 The DOCKER is pushed to hub.docker.com 
 
    slyubski/bldq:10.0.1
+
+ ----- 11/03/2023 -----
+
+ Added some tentative build script which is about to be used
+ in CI/CD pipeline.  
