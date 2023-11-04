@@ -1,6 +1,7 @@
 project('qemu', ['c'], meson_version: '>=0.63.0',
         default_options: ['warning_level=1', 'c_std=gnu11', 'cpp_std=gnu++11', 'b_colorout=auto',
-                          'b_staticpic=false', 'stdsplit=false', 'optimization=2', 'b_pie=true'],
+                          'b_staticpic=false', 'stdsplit=false', 'optimization=2', 'b_pie=true',
+                          'is_library=false'],
         version: files('VERSION'))
 
 add_test_setup('quick', exclude_suites: ['slow', 'thorough'], is_default: true)
@@ -274,7 +275,12 @@ endif
 # tries to build an executable instead of a shared library and fails.  So
 # don't add -no-pie anywhere and cross fingers. :(
 if not get_option('b_pie')
-  qemu_common_flags += cc.get_supported_arguments('-fno-pie', '-no-pie')
+  if get_option('is_library')
+     qemu_common_flags += cc.get_supported_arguments('-fPIC', '-shared')
+     qemu_ldflags += '-shared'
+  else
+     qemu_common_flags += cc.get_supported_arguments('-fno-pie', '-no-pie')
+  endif
 endif
 
 if not get_option('stack_protector').disabled()
@@ -3802,8 +3808,13 @@ foreach target : target_dirs
                  name_suffix: 'fa')
 
   if target.endswith('-softmmu')
+    if get_option('is_library')
+        ext='.so'
+    else
+        ext=''
+    endif
     execs = [{
-      'name': 'qemu-system-' + target_name,
+      'name': 'qemu-system-' + target_name + ext,
       'win_subsystem': 'console',
       'sources': files('system/main.c'),
       'dependencies': []
@@ -4118,6 +4129,7 @@ endif
 summary_info += {'QEMU_LDFLAGS':      ' '.join(qemu_ldflags)}
 summary_info += {'link-time optimization (LTO)': get_option('b_lto')}
 summary_info += {'PIE':               get_option('b_pie')}
+summary_info += {'qemu lib':          get_option('is_library')}
 summary_info += {'static build':      get_option('prefer_static')}
 summary_info += {'malloc trim support': has_malloc_trim}
 summary_info += {'membarrier':        have_membarrier}
