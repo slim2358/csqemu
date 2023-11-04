@@ -1,0 +1,1 @@
+/home/srozhkov/develop/csqemu/pc-bios/optionrom/Makefile
