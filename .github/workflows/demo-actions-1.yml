@@ -1,0 +1,16 @@
+#
+#  Demo 1
+#
+
+name demo-workflow
+
+on:
+ workflow_dispatch:
+   branches:
+    - main
+
+jobs:
+  Run trivial demo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "There very first GUTHUB demo ......."
