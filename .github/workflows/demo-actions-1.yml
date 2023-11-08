@@ -10,5 +10,8 @@ jobs:
   Run-trivial-demo:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "There very first GUTHUB demo ......."
+      - run: echo "The very first GUTHUB demo ......."
       - run: ls -la 
+      - name: --- Check out git repo ------
+      - uses: actions/checkout@v4
+      - run: ls -la
