@@ -9,6 +9,8 @@ on: [workflow_dispatch]
 jobs:
   Run-trivial-demo:
     runs-on: ubuntu-latest
+    container:
+      image: slyubski/bldq:1.0.1
     steps:
       - run: echo "The very first GUTHUB demo ......."
       - run: ls -la 
