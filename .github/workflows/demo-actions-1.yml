@@ -5,6 +5,8 @@
 name: demo-workflow
 
 on: [workflow_dispatch]
+env:
+  BUILD_N: ${{ github.run_number }}
  
 jobs:
   Run-trivial-demo:
@@ -25,7 +27,7 @@ jobs:
       - run: ls -la INSTALL
       - run: echo " ==== ${{ github.job }} ==== "
       - run: echo " ==== ${{ github.actor }} ===="
-      - run: echo " ==== ${{ github.run_number }} ===="
+      - run: echo " ==== $BUILD_N ===="
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with: 
