@@ -13,6 +13,7 @@ jobs:
       image: slyubski/bldq:1.0.1
     steps:
       - run: echo "The very first GUTHUB demo ......."
+      - run: pwd
       - run: ls -la 
       - run: which pkg-config
       - run: which gcc
