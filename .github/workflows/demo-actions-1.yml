@@ -23,7 +23,7 @@ jobs:
       - run: ls -la
       - run: ./build-fake.sh INSTALL  5567
       - run: ls -la INSTALL
-      - run: echo " ==== {{ github.job }} ====
+      - run: echo " ==== {{ github.job }} ==== "
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with: 
