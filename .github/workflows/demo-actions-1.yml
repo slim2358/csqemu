@@ -7,7 +7,7 @@ name: demo-workflow
 on: [workflow_dispatch]
 env:
   BUILD_N: ${{ github.run_number }}
-  PROJ_ID: ${{ RUN_ID }}
+  PROJ_ID: ${{ github.run_id }}
 jobs:
   Run-trivial-demo:
     runs-on: ubuntu-latest
