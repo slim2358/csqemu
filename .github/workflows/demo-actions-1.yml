@@ -14,7 +14,7 @@ jobs:
     steps:
       - run: echo "The very first GUTHUB demo ......."
       - run: pwd
-      - run: ls -la 
+      - run: ls -la /
       - run: which pkg-config
       - run: which gcc
       - run: which ninja
