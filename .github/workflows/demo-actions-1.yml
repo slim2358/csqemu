@@ -17,7 +17,5 @@ jobs:
       - name: --- Check out git repo ------
         uses: actions/checkout@v4
       - run: ls -la
-      - name: --- Run fake script ----
       - run: ./build-fake.sh INSTALL  5567
-      - name: ---- show result ----
       - run: ls -la INSTALL
