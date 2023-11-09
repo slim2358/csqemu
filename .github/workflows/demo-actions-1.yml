@@ -16,6 +16,7 @@ jobs:
       - run: ls -la 
       - run: which pkg-config
       - run: which gcc
+      - run: which ninja
       - name: --- Check out git repo ------
         uses: actions/checkout@v4
       - run: ls -la
