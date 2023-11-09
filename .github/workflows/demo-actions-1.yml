@@ -23,7 +23,7 @@ jobs:
       - name: --- Check out git repo ------
         uses: actions/checkout@v4
       - run: ls -la
-      - run: ./build-fake.sh INSTALL  5567
+      - run: ./build-fake.sh INSTALL  $BUILD_N
       - run: ls -la INSTALL
       - run: echo " ==== ${{ github.job }} ==== "
       - run: echo " ==== ${{ github.actor }} ===="
@@ -31,7 +31,7 @@ jobs:
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with: 
-          name: qemu-build
+          name: qemu-build.$PROJ_ID.$BUILD_N
           path: |
             INSTALL
             INSTALL/*.tar
