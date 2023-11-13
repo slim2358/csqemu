@@ -32,5 +32,4 @@ jobs:
         with: 
           name: qemu-build.${{ github.run_id }}.${{ github.run_number }}
           path: |
-            INSTALL
             INSTALL/QEMU*.tar
