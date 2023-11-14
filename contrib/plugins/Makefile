@@ -9,6 +9,7 @@
 include config-host.mak
 
 TOP_SRC_PATH = $(SRC_PATH)/../..
+BUILD_DIR = $(PWD)
 
 VPATH += $(SRC_PATH)
 
@@ -24,11 +25,27 @@ NAMES += drcov
 
 SONAMES := $(addsuffix .so,$(addprefix lib,$(NAMES)))
 
+TARGET_LIB = $(findstring lib-softmmu, $(TARGET_DIRS))
+ifeq ($(TARGET_LIB), lib-softmmu)
+Q_DYNLIB = y
+endif
+
 # The main QEMU uses Glib extensively so it's perfectly fine to use it
 # in plugins (which many example do).
 PLUGIN_CFLAGS := $(shell $(PKG_CONFIG) --cflags glib-2.0)
 PLUGIN_CFLAGS += -fPIC -Wall
 PLUGIN_CFLAGS += -I$(TOP_SRC_PATH)/include/qemu
+
+ifeq ($(Q_DYNLIB), y)
+BUILD_DIR=$(PWD)
+
+# Additional CFLAGS to compile extended plugins to access CPUArchState
+PLUGIN_CFLAGS += -I$(TOP_SRC_PATH)/include
+PLUGIN_CFLAGS += -I$(BUILD_DIR) -I$(TOP_SRC_PATH)/target/riscv
+PLUGIN_CFLAGS += -DNEED_CPU_H -DCONFIG_TARGET="<$(TARGET_DIRS)-config-target.h>"
+
+LD_PATH=$(BUILD_DIR)
+endif
 
 all: $(SONAMES)
 
@@ -39,7 +56,11 @@ lib%.so: %.o
 ifeq ($(CONFIG_DARWIN),y)
 	$(CC) -bundle -Wl,-undefined,dynamic_lookup -o $@ $^ $(LDLIBS)
 else
+ifeq ($(Q_DYNLIB), y)
+	$(CC) -shared -o $@ $^ $(LDLIBS) -L$(LD_PATH) -l:qemu-system-riscv64.so -Wl,-rpath=$(LD_PATH)
+else
 	$(CC) -shared -o $@ $^ $(LDLIBS)
+endif
 endif
 
 clean:

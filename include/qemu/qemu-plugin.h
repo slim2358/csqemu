@@ -329,6 +329,20 @@ void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,
                                                 void *ptr, uint64_t imm);
 
 /**
+ * qemu_plugin_register_vcpu_insn_after_exec_cb() - register after insn execution cb
+ * @insn: the opaque qemu_plugin_insn handle for an instruction
+ * @cb: callback function
+ * @flags: does the plugin read or write the CPU's registers?
+ * @userdata: any plugin data to pass to the @cb?
+ *
+ * The @cb function is called every time after an instruction is executed
+ */
+void qemu_plugin_register_vcpu_insn_after_exec_cb(struct qemu_plugin_insn *insn,
+                                                  qemu_plugin_vcpu_udata_cb_t cb,
+                                                  enum qemu_plugin_cb_flags flags,
+                                                  void *userdata);
+
+/**
  * qemu_plugin_tb_n_insns() - query helper for number of insns in TB
  * @tb: opaque handle to TB passed to callback
  *
@@ -663,5 +677,13 @@ uint64_t qemu_plugin_end_code(void);
  * user-mode. Currently returns 0 for system emulation.
  */
 uint64_t qemu_plugin_entry_code(void);
+
+/*
+ * Get CPUState from inside the plugin
+ *
+ * CPUArchState can b ederived from CPUState:
+ * CPUArchState *cpu = (CPUArchState *)((CPUState *)qemu_plugin_get_cpu(cpu_index) + 1)
+ */  
+void *qemu_plugin_get_cpu(int cpu_index);
 
 #endif /* QEMU_QEMU_PLUGIN_H */

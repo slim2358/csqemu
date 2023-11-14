@@ -52,6 +52,19 @@
 #endif
 #endif
 
+/*
+ * Get CPUState from inside the plugin
+ *
+ * CPUArchState can b ederived from CPUState:
+ * CPUArchState *cpu = (CPUArchState *)((CPUState *)qemu_plugin_get_cpu(cpu_index) + 1)
+ */  
+
+void *qemu_plugin_get_cpu (int cpu_index)
+{
+    return (void *)qemu_get_cpu(cpu_index);
+}
+
+
 /* Uninstall and Reset handlers */
 
 void qemu_plugin_uninstall(qemu_plugin_id_t id, qemu_plugin_simple_cb_t cb)
@@ -121,6 +134,17 @@ void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,
     if (!insn->mem_only) {
         plugin_register_inline_op(&insn->cbs[PLUGIN_CB_INSN][PLUGIN_CB_INLINE],
                                   0, op, ptr, imm);
+    }
+}
+
+void qemu_plugin_register_vcpu_insn_after_exec_cb(struct qemu_plugin_insn *insn,
+                                                  qemu_plugin_vcpu_udata_cb_t cb,
+                                                  enum qemu_plugin_cb_flags flags,
+                                                  void *udata)
+{
+    if (!insn->mem_only) {
+        plugin_register_dyn_cb__udata(&insn->cbs[PLUGIN_CB_AFTER_INSN][PLUGIN_CB_REGULAR],
+                                      cb, flags, udata);
     }
 }
 
