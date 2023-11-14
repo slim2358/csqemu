@@ -26,19 +26,32 @@ fi
 PREFIX=$1
 BUILDN=$2
 
-echo "Install PERFIX = <$PREFIX>"
+echo "Install PREFIX = <$PREFIX>"
 echo "BUILD number   = <$BUILDN>"
-
-mkdir $PREFIX
 
 QEMU_ROOT=`pwd`
 echo "----   QEMU root = <${QEMU_ROOT}> ----"
 
-PREFIX_FOR_CONFIGURE=${QEMU_ROOT}/${PREFIX}
-echo "---- QEMU install preix = <${PREFIX_FOR_CONFIGURE}> ----"
+#
+# To distinguish between an absolute and relative path
+#
+if [[ $PREFIX == /* ]];
+then
+
+  PREFIX_FOR_INSTALL=${PREFIX}
+  echo "---- QEMU install prefix = <${PREFIX_FOR_INSTALL}> ----"
+
+else
+
+  PREFIX_FOR_INSTALL=${QEMU_ROOT}/${PREFIX}
+  echo "---- QEMU install prefix = <${PREFIX_FOR_INSTALL}> ----"
+fi
+
+mkdir -p $PREFIX_FOR_INSTALL
+ls -la  $PREFIX_FOR_INSTALL
 
 echo "===================== Configure ..... ========================"
-./configure --prefix="${PREFIX_FOR_CONFIGURE}" --target-list="riscv64-linux-user,riscv64-softmmu"
+./configure --prefix="${PREFIX_FOR_INSTALL}" --target-list="riscv64-linux-user,riscv64-softmmu"
 
 if [ $? -ne 0 ];
 then
@@ -58,6 +71,8 @@ fi
 echo "===================== Make install ..... ========================"
 make install
 
+ls -la  $PREFIX_FOR_INSTALL
+
 echo "===================== Make tarball  ..... ========================"
-tar -C INSTALL -cvf QEMU.bld.${BUILDN}.tar .
-mv QEMU.bld.${BUILDN}.tar INSTALL
+tar -C ${PREFIX_FOR_INSTALL} -cvf QEMU.bld.${BUILDN}.tar .
+mv QEMU.bld.${BUILDN}.tar $PREFIX_FOR_INSTALL
