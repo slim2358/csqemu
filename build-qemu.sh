@@ -71,7 +71,10 @@ fi
 echo "===================== Make install ..... ========================"
 make install
 
-ls -la  $PREFIX_FOR_INSTALL
+echo "===================== Install plugins ..... ========================"
+mkdir -p ${PREFIX_FOR_INSTALL}/plugins
+cp build/contrib/plugins/*.so  ${PREFIX_FOR_INSTALL}/plugins
+
 
 echo "===================== Make tarball  ..... ========================"
 tar -C ${PREFIX_FOR_INSTALL} -cvf QEMU.bld.${BUILDN}.tar .
