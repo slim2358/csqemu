@@ -71,6 +71,24 @@ fi
 echo "===================== Make install ..... ========================"
 make install
 
+##########################################################################
+
+echo "===================== Make QEMU.so..... ========================"
+mkdir -p build-lib
+cd build-lib
+../configure --prefix="${PREFIX_FOR_INSTALL}" --target-list="riscv64-lib-softmmu"
+make
+
+if [ $? -ne 0 ];
+then
+  echo "Failed: Make QEMU.so RC = $?"
+  exit 0;
+fi
+
+make install
+
+##########################################################################
+
 echo "===================== Install plugins ..... ========================"
 mkdir -p ${PREFIX_FOR_INSTALL}/plugins
 cp build/contrib/plugins/*.so  ${PREFIX_FOR_INSTALL}/plugins
