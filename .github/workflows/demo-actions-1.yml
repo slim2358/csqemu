@@ -1,0 +1,41 @@
+#
+#  Demo 1
+#
+# NOTE! BUILD_N variable below is propagated
+# into RUN command.
+# Yet it is not propagated into ARTIFACTS though
+# {{ github.XXX }} is substitued inside ARTIFACTS
+#
+name: demo-workflow
+
+on: [workflow_dispatch]
+env:
+  BUILD_N: ${{ github.run_number }}
+  PROJ_ID: ${{ github.run_id }}
+jobs:
+  Run-trivial-demo:
+    runs-on: ubuntu-latest
+    container:
+      image: slyubski/bldq:1.0.1
+    steps:
+      - run: echo "The very first GUTHUB demo ......."
+      - run: pwd
+      - run: ls -la /
+      - run: which pkg-config
+      - run: which gcc
+      - run: which ninja
+      - name: --- Check out git repo ------
+        uses: actions/checkout@v4
+      - run: ls -la
+      - run: ./build-fake.sh INSTALL  $BUILD_N
+      - run: ls -la INSTALL
+      - run: echo " ==== ${{ github.job }} ==== "
+      - run: echo " ==== ${{ github.actor }} ===="
+      - run: echo " ==== $BUILD_N. $PROJ_ID ===="
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with: 
+          name: qemu-build.${{ github.run_id }}.${{ github.run_number }}
+          path: |
+            INSTALL
+            INSTALL/*.tar

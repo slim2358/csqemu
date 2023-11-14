@@ -13,7 +13,15 @@ fi
 PREFIX=$1
 BUILDN=$2
 
-echo "Install prefix <$PREFIX>;  build=<$BUILDN>"
+echo "Install prefix <$PREFIX> build=<$BUILDN>"
+
+mkdir $PREFIX
+
+QEMU_ROOT=`pwd`
+echo "----   QEMU root = <${QEMU_ROOT}> ----"
+
+PREFIX_FOR_CONFIGURE=${QEMU_ROOT}/${PREFIX}
+echo "---- QEMU install preix = <${PREFIX_FOR_CONFIGURE}> ----"
 
 cp qem* $PREFIX
 cd $PREFIX

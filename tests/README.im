@@ -1,0 +1,3 @@
+**** 11/12/2023 ****
+Added the new BARE METAL hello test - riscv-baremetal.tar
+All the directions are in Makefile

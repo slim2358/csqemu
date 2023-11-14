@@ -1,0 +1,35 @@
+#
+#  **** 11/09/2023 ****
+#  QEMU buuld YML script.
+# 
+#  This file builds QEMU inside DOCKER container,
+#  archives QENMU INSTALL directory
+#  and uploads archived INSTALL as an ARTIFACT(s)   
+#
+name: qemu-build
+
+#
+# Is launched upon manually pushed RUN WORKFLOW button
+#
+on: [workflow_dispatch]
+env:
+  BUILD_N: ${{ github.run_number }}
+  PROJ_ID: ${{ github.run_id }}
+jobs:
+  Run-build-qemu:
+    runs-on: ubuntu-latest
+    container:
+      image: slyubski/bldq:1.0.1
+    steps:
+      - run: ls -la /
+      - name: ------ Check out git repo ------
+        uses: actions/checkout@v4
+      - run: ls -la
+      - run: ./build-qemu.sh INSTALL  $BUILD_N
+      - run: ls -la INSTALL
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with: 
+          name: qemu-build.${{ github.run_id }}.${{ github.run_number }}
+          path: |
+            INSTALL/QEMU*.tar
