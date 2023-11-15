@@ -35,6 +35,9 @@
 #include "qapi/qmp/qstring.h"
 #include "qapi/qmp/qjson.h"
 #include "qemu-version.h"
+
+#include "qemu/im-qemu-version.h"
+
 #include "qemu/cutils.h"
 #include "qemu/help_option.h"
 #include "qemu/hw-version.h"
@@ -865,8 +868,14 @@ static MachineClass *find_default_machine(GSList *machines)
 
 static void version(void)
 {
-    printf("QEMU emulator version " QEMU_FULL_VERSION "\n"
+
+#if 0
+    printf("QEMU emulator version  " QEMU_FULL_VERSION "\n"
            QEMU_COPYRIGHT "\n");
+#else
+    printf("QEMU emulator version  " IM_QEMU_FULL_VERSION "\n"
+           QEMU_COPYRIGHT "\n");
+#endif
 }
 
 static void help(int exitcode)
