@@ -87,6 +87,11 @@ fi
 
 make install
 
+#
+# Step back to QEMU root after QEMU.so was built
+#
+cd -
+
 ##########################################################################
 
 echo "===================== Install plugins ..... ========================"

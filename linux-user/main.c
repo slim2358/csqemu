@@ -22,6 +22,9 @@
 #include "qemu/units.h"
 #include "qemu/accel.h"
 #include "qemu-version.h"
+
+#include "qemu/im-qemu-version.h"
+
 #include <sys/syscall.h>
 #include <sys/resource.h>
 #include <sys/shm.h>
@@ -418,8 +421,14 @@ static void handle_arg_strace(const char *arg)
 
 static void handle_arg_version(const char *arg)
 {
+
+#if 0
     printf("qemu-" TARGET_NAME " version " QEMU_FULL_VERSION
            "\n" QEMU_COPYRIGHT "\n");
+#else
+    printf("qemu-" TARGET_NAME " version " IM_QEMU_FULL_VERSION
+           "\n" QEMU_COPYRIGHT "\n");
+#endif
     exit(EXIT_SUCCESS);
 }
 
