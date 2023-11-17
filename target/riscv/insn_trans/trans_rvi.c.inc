@@ -75,6 +75,9 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
     gen_set_gpr(ctx, a->rd, succ_pc);
 
     tcg_gen_mov_tl(cpu_pc, target_pc);
+    if (ctx->base.plugin_enabled) {
+        plugin_gen_insn_exec_end();
+    }
     lookup_and_goto_ptr(ctx);
 
     if (misaligned) {
@@ -819,6 +822,9 @@ static bool do_csr_post(DisasContext *ctx)
     decode_save_opc(ctx);
     /* We may have changed important cpu state -- exit to main loop. */
     gen_update_pc(ctx, ctx->cur_insn_len);
+    if (ctx->base.plugin_enabled) {
+        plugin_gen_insn_exec_end();
+    }
     exit_tb(ctx);
     ctx->base.is_jmp = DISAS_NORETURN;
     return true;

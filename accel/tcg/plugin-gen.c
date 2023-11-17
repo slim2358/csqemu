@@ -73,6 +73,7 @@ enum plugin_gen_from {
     PLUGIN_GEN_FROM_TB,
     PLUGIN_GEN_FROM_INSN,
     PLUGIN_GEN_FROM_MEM,
+    PLUGIN_GEN_AFTER_INSN_EXEC,
     PLUGIN_GEN_AFTER_INSN,
     PLUGIN_GEN_N_FROMS,
 };
@@ -182,6 +183,8 @@ static void plugin_gen_empty_callback(enum plugin_gen_from from)
     case PLUGIN_GEN_AFTER_INSN:
         gen_wrapped(from, PLUGIN_GEN_DISABLE_MEM_HELPER,
                     gen_empty_mem_helper);
+        break;
+    case PLUGIN_GEN_AFTER_INSN_EXEC:
         gen_wrapped(from, PLUGIN_GEN_CB_UDATA, gen_empty_udata_cb);
         break;
     case PLUGIN_GEN_FROM_INSN:
@@ -785,6 +788,16 @@ static void plugin_gen_inject(struct qemu_plugin_tb *plugin_tb)
                 case PLUGIN_GEN_DISABLE_MEM_HELPER:
                     plugin_gen_disable_mem_helper(plugin_tb, op, insn_idx);
                     break;
+                default:
+                    g_assert_not_reached();
+                }
+                break;
+            }
+            case PLUGIN_GEN_AFTER_INSN_EXEC:
+            {
+                g_assert(insn_idx >= 0);
+
+                switch (type) {
                 case PLUGIN_GEN_CB_UDATA:
                     plugin_gen_after_insn_udata(plugin_tb, op, insn_idx);
                     break;
@@ -865,6 +878,11 @@ void plugin_gen_insn_start(CPUState *cpu, const DisasContextBase *db)
         }
         pinsn->haddr = ptb->haddr2 + pinsn->vaddr - ptb->vaddr2;
     }
+}
+
+void plugin_gen_insn_exec_end(void)
+{
+    plugin_gen_empty_callback(PLUGIN_GEN_AFTER_INSN_EXEC);
 }
 
 void plugin_gen_insn_end(void)

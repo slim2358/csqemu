@@ -28,6 +28,7 @@
 
 #include "exec/translator.h"
 #include "exec/log.h"
+#include "exec/plugin-gen.h"
 #include "semihosting/semihost.h"
 
 #include "instmap.h"
@@ -306,6 +307,9 @@ static void gen_goto_tb(DisasContext *ctx, int n, target_long diff)
         tcg_gen_exit_tb(ctx->base.tb, n);
     } else {
         gen_update_pc(ctx, diff);
+        if (ctx->base.plugin_enabled) {
+            plugin_gen_insn_exec_end();
+        }
         lookup_and_goto_ptr(ctx);
     }
 }
