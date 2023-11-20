@@ -26,13 +26,17 @@
 #include "qemu-main.h"
 #include "sysemu/sysemu.h"
 
+#include "qemu/log.h"
+
 #ifdef CONFIG_SDL
 #include <SDL.h>
 #endif
 
 int qemu_default_main(void)
 {
-    int status;
+    int status = 0;
+
+LOGIM("----> qemu_main_loop() status = %d", status);
 
     status = qemu_main_loop();
     qemu_cleanup(status);
@@ -44,6 +48,16 @@ int (*qemu_main)(void) = qemu_default_main;
 
 int main(int argc, char **argv)
 {
+
+#if 0 ////////////
+
+    int i;
+    for (i  = 0; i < argc; i++) {
+      printf ("%s(): argv [%d] = %s \n", __FUNCTION__, i, argv[i]);
+    }
+
+#endif ///////////
+
     qemu_init(argc, argv);
     return qemu_main();
 }

@@ -258,6 +258,8 @@ static void *rr_cpu_thread_fn(void *arg)
                 if (icount_enabled()) {
                     icount_prepare_for_run(cpu, cpu_budget);
                 }
+
+		printf ("tcg-accel-ops-rr.c : %s(): ----> tcg_cpus_exec()\n", __FUNCTION__);
                 r = tcg_cpus_exec(cpu);
                 if (icount_enabled()) {
                     icount_process_data(cpu);

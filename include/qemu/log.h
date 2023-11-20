@@ -37,6 +37,8 @@ bool qemu_log_separate(void);
 #define LOG_PER_THREAD     (1 << 20)
 #define CPU_LOG_TB_VPU     (1 << 21)
 
+#define LOG_IM_SIMPLE      (1 << 22)
+
 /* Lock/unlock output. */
 
 FILE *qemu_log_trylock(void) G_GNUC_WARN_UNUSED_RESULT;
@@ -93,5 +95,7 @@ int qemu_str_to_log_mask(const char *str);
  * to the specified FILE*.
  */
 void qemu_print_log_usage(FILE *f);
+
+#define LOGIM(args...) qemu_simple_log(__FILE__, __FUNCTION__, args)
 
 #endif

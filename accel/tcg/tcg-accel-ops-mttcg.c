@@ -28,6 +28,9 @@
 #include "sysemu/replay.h"
 #include "sysemu/cpu-timers.h"
 #include "qemu/main-loop.h"
+
+#include "qemu/log.h"
+
 #include "qemu/notify.h"
 #include "qemu/guest-random.h"
 #include "exec/exec-all.h"
@@ -92,6 +95,7 @@ static void *mttcg_cpu_thread_fn(void *arg)
         if (cpu_can_run(cpu)) {
             int r;
             qemu_mutex_unlock_iothread();
+
             r = tcg_cpus_exec(cpu);
             qemu_mutex_lock_iothread();
             switch (r) {
@@ -144,6 +148,8 @@ void mttcg_start_vcpu_thread(CPUState *cpu)
     /* create a thread per vCPU with TCG (MTTCG) */
     snprintf(thread_name, VCPU_THREAD_NAME_SIZE, "CPU %d/TCG",
              cpu->cpu_index);
+
+LOGIM ("- - via thread - - > mttcg_cpu_thread_fn(), cpu = %p\n", cpu);
 
     qemu_thread_create(cpu->thread, thread_name, mttcg_cpu_thread_fn,
                        cpu, QEMU_THREAD_JOINABLE);

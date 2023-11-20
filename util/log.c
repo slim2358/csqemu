@@ -31,7 +31,6 @@
 #include <sys/syscall.h>
 #endif
 
-
 typedef struct RCUCloseFILE {
     struct rcu_head rcu;
     FILE *fd;
@@ -47,6 +46,39 @@ static __thread Notifier qemu_log_thread_cleanup_notifier;
 int qemu_loglevel;
 static bool log_per_thread;
 static GArray *debug_regions;
+
+#if 1 ////////////// The IM log simple extension //////////////////
+
+static char *im_log_prefix = NULL;
+static FILE *im_log_fp     = NULL;
+
+static void qemu_simple_log_enable (void)
+{
+    if (im_log_prefix != NULL) {
+
+        char *im_log_fname = (char*)malloc (strlen(im_log_prefix) + 64);
+        sprintf (im_log_fname, "%s.%d.IMLOG", im_log_prefix, getpid ());
+
+        im_log_fp = fopen (im_log_fname, "w"); 
+    }
+} 
+
+void qemu_simple_log (const char *F, const char *FN, const  char *fmt, ...)
+{
+    if (im_log_fp == NULL) {
+        return;
+    } 
+    va_list ap;
+    fprintf(im_log_fp, "=== %s : %s() :",  F, FN);
+    va_start (ap, fmt);
+    vfprintf (im_log_fp, fmt, ap);
+    
+    va_end(ap); 
+    fprintf (im_log_fp,"\n");
+    fflush (im_log_fp);
+}
+
+#endif  /////////////////////////////////////////////////////////
 
 /* Returns true if qemu_log() will really write somewhere. */
 bool qemu_log_enabled(void)
@@ -509,6 +541,7 @@ int qemu_str_to_log_mask(const char *str)
     int mask = 0;
     char **parts = g_strsplit(str, ",", 0);
     char **tmp;
+    char *pp = NULL;
 
     for (tmp = parts; tmp && *tmp; tmp++) {
         if (g_str_equal(*tmp, "all")) {
@@ -519,6 +552,11 @@ int qemu_str_to_log_mask(const char *str)
         } else if (g_str_has_prefix(*tmp, "trace:") && (*tmp)[6] != '\0') {
             trace_enable_events((*tmp) + 6);
             mask |= LOG_TRACE;
+        } else if (g_str_has_prefix(*tmp, "prefix:")) {
+            pp = *tmp + 7;
+            im_log_prefix = strdup (pp);
+	    qemu_simple_log_enable ();
+	    mask |= LOG_IM_SIMPLE;
 #endif
         } else {
             for (item = qemu_log_items; item->mask != 0; item++) {

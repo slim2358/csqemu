@@ -34,6 +34,9 @@
 #include "sysemu/hw_accel.h"
 #include "exec/cpu-common.h"
 #include "qemu/thread.h"
+
+#include "qemu/log.h"
+
 #include "qemu/main-loop.h"
 #include "qemu/plugin.h"
 #include "sysemu/cpus.h"
@@ -639,11 +642,17 @@ void qemu_init_vcpu(CPUState *cpu)
 
     /* accelerators all implement the AccelOpsClass */
     g_assert(cpus_accel != NULL && cpus_accel->create_vcpu_thread != NULL);
+
+LOGIM("--> create_vcpu_thread() cpu = %p, cpu->created = %d", cpu, cpu->created);
+
     cpus_accel->create_vcpu_thread(cpu);
 
     while (!cpu->created) {
         qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
     }
+
+LOGIM("<-- qemu_cond_wait() cpu->created = %d", cpu->created);
+
 }
 
 void cpu_stop_current(void)

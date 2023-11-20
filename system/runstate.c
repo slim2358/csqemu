@@ -778,9 +778,19 @@ int qemu_main_loop(void)
 {
     int status = EXIT_SUCCESS;
 
+LOGIM("--> main_loop_should_exit()");
+
     while (!main_loop_should_exit(&status)) {
+
+LOGIM ("<-- main_loop_exit() status = %d ", status);
+LOGIM ("---> main_loop_wait()");
+
         main_loop_wait(false);
+
+LOGIM ("<--- main_loop_wait()");
     }
+
+LOGIM ("RETURN status = %d", status);
 
     return status;
 }

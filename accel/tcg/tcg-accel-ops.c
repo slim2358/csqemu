@@ -32,6 +32,9 @@
 #include "qemu/main-loop.h"
 #include "qemu/guest-random.h"
 #include "qemu/timer.h"
+
+#include "qemu/log.h"
+
 #include "exec/exec-all.h"
 #include "exec/hwaddr.h"
 #include "exec/gdbstub.h"
@@ -70,6 +73,7 @@ void tcg_cpus_destroy(CPUState *cpu)
 int tcg_cpus_exec(CPUState *cpu)
 {
     int ret;
+
     assert(tcg_enabled());
     cpu_exec_start(cpu);
     ret = cpu_exec(cpu);
@@ -188,11 +192,19 @@ static inline void tcg_remove_all_breakpoints(CPUState *cpu)
 
 static void tcg_accel_ops_init(AccelOpsClass *ops)
 {
+    bool mttcg_e = qemu_tcg_mttcg_enabled();
+  
     if (qemu_tcg_mttcg_enabled()) {
+
+LOGIM ("ops->create_vcpu_thread <== mttcg_start_vcpu_thread:  mttcg_e = %d", mttcg_e);
+
         ops->create_vcpu_thread = mttcg_start_vcpu_thread;
         ops->kick_vcpu_thread = mttcg_kick_vcpu_thread;
         ops->handle_interrupt = tcg_handle_interrupt;
     } else {
+
+LOGIM ("ops->create_vcpu_thread <== rr_start_vcpu_thread:  mttcg_e = %d", mttcg_e);
+
         ops->create_vcpu_thread = rr_start_vcpu_thread;
         ops->kick_vcpu_thread = rr_kick_vcpu_thread;
 

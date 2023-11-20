@@ -33,6 +33,7 @@
 #include "block/thread-pool.h"
 #include "qemu/error-report.h"
 #include "qemu/queue.h"
+#include "qemu/log.h"
 #include "qom/object.h"
 
 #ifndef _WIN32
@@ -589,7 +590,12 @@ void main_loop_wait(int nonblocking)
                                       timerlistgroup_deadline_ns(
                                           &main_loop_tlg));
 
+LOGIM("--> os_host_main_loop_wait () TM = %ld", timeout_ns);
+
     ret = os_host_main_loop_wait(timeout_ns);
+
+LOGIM("<-- os_host_main_loop_wait () ret = %d", ret);
+
     mlpoll.state = ret < 0 ? MAIN_LOOP_POLL_ERR : MAIN_LOOP_POLL_OK;
     notifier_list_notify(&main_loop_poll_notifiers, &mlpoll);
 
