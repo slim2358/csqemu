@@ -47,6 +47,8 @@ static TCGOp *gen_tb_start(DisasContextBase *db, uint32_t cflags)
     TCGv_i32 count = NULL;
     TCGOp *icount_start_insn = NULL;
 
+LOGIM("cflags = 0x%x, (cflags & CF_LAST_IO) = 0x%x", cflags, cflags & CF_LAST_IO);
+
     if ((cflags & CF_USE_ICOUNT) || !(cflags & CF_NOIRQ)) {
         count = tcg_temp_new_i32();
         tcg_gen_ld_i32(count, tcg_env,
@@ -89,7 +91,18 @@ static TCGOp *gen_tb_start(DisasContextBase *db, uint32_t cflags)
      * each translation block.  The cost is minimal, plus it would be
      * very easy to forget doing it in the translator.
      */
+
+LOGIM("--> set_can_do_io()  db->max_insns = %d", db->max_insns);
+
+/*
+ *  GITHUB issue #1 - the temporary fix. 
+ *  There are more comprehensive change in later QEMU version.
+ */
+#if 0
     set_can_do_io(db, db->max_insns == 1 && (cflags & CF_LAST_IO));
+#else
+    set_can_do_io(db, db->max_insns == 1);
+#endif
 
     return icount_start_insn;
 }
@@ -131,6 +144,8 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
     TCGOp *icount_start_insn;
     bool plugin_enabled;
 
+LOGIM("max_insns = %d, cflags = 0x%x", *max_insns, cflags);
+
     /* Initialize DisasContext */
     db->tb = tb;
     db->pc_first = pc;
@@ -146,6 +161,8 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 
+LOGIM("gen_tb_start() cflags = 0x%x", cflags);
+
     /* Start translating.  */
     icount_start_insn = gen_tb_start(db, cflags);
     ops->tb_start(db, cpu);
@@ -153,6 +170,9 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
 
     if (cflags & CF_MEMI_ONLY) {
         /* We should only see CF_MEMI_ONLY for io_recompile. */
+
+      // SL!!! Do we really need this assert for ONE instr per TB
+
         assert(cflags & CF_LAST_IO);
         plugin_enabled = plugin_gen_tb_start(cpu, db, true);
     } else {
