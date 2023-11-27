@@ -33,10 +33,10 @@
 #endif
 
 int qemu_default_main(void)
-{
+{ 
     int status = 0;
 
-LOGIM("----> qemu_main_loop() status = %d", status);
+LOGIM("--> qemu_main_loop() status = %d", status);
 
     status = qemu_main_loop();
     qemu_cleanup(status);
@@ -48,16 +48,27 @@ int (*qemu_main)(void) = qemu_default_main;
 
 int main(int argc, char **argv)
 {
-
-#if 0 ////////////
-
     int i;
-    for (i  = 0; i < argc; i++) {
-      printf ("%s(): argv [%d] = %s \n", __FUNCTION__, i, argv[i]);
+    for (i = 0; i < argc; i++) {
+        printf ("%s() ---- argv [%d] = %s\n ", __FUNCTION__, i, argv[i]);
     }
 
-#endif ///////////
+    bool iam_qemu_so = (strcmp (argv[argc - 1], "-cosim") == 0);
+    if (iam_qemu_so) {
+        argc--;
+    }
+    qemu_init (argc, argv);
 
-    qemu_init(argc, argv);
+    if (iam_qemu_so) {
+        printf("%s() ---- RETURN from QEMU\n", __FUNCTION__);
+        return 0;
+    }
+      
+LOGIM ("<------ qemu_init()");
+
     return qemu_main();
 }
+
+
+
+
