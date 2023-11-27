@@ -75,7 +75,11 @@ make install
 
 echo "===================== Make QEMU.so..... ========================"
 mkdir -p build-lib
-cd build-lib
+
+# cd build-lib
+# How about GLIB
+cd build
+
 ../configure --prefix="${PREFIX_FOR_INSTALL}" --target-list="riscv64-lib-softmmu"
 make
 
