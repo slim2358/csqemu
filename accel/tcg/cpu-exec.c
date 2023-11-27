@@ -19,6 +19,9 @@
 
 #include "qemu/osdep.h"
 #include "qemu/qemu-print.h"
+
+#include "qemu/log.h"
+
 #include "qapi/error.h"
 #include "qapi/type-helpers.h"
 #include "hw/core/tcg-cpu-ops.h"
@@ -450,14 +453,24 @@ cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
     TranslationBlock *last_tb;
     const void *tb_ptr = itb->tc.ptr;
 
+LOGIM("tb = %p", itb);
+
     if (qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC)) {
         log_cpu_exec(log_pc(cpu, itb), cpu, itb);
     }
 
     qemu_thread_jit_execute();
+
+LOGIM("<-- qemu_thread_jit_execute()");
+
     ret = tcg_qemu_tb_exec(env, tb_ptr);
+
+LOGIM("<-- tcg_qemu_tb_exec()");
+
     cpu->neg.can_do_io = true;
     qemu_plugin_disable_mem_helpers(cpu);
+LOGIM("<-- qemu_plugin_disable_mem_helpers()");
+
     /*
      * TODO: Delay swapping back to the read-write region of the TB
      * until we actually need to modify the TB.  The read-only copy,
@@ -467,9 +480,12 @@ cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
      * double the host TLB pressure.
      */
     last_tb = tcg_splitwx_to_rw((void *)(ret & ~TB_EXIT_MASK));
+LOGIM("<-- tcg_splitwx_to_rw()");
+
     *tb_exit = ret & TB_EXIT_MASK;
 
     trace_exec_tb_exit(last_tb, *tb_exit);
+    LOGIM("<-- trace_exec_tb_exit() tb_exit = %d ", *tb_exit);
 
     if (*tb_exit > TB_EXIT_IDX1) {
         /* We didn't start executing this TB (eg because the instruction
@@ -800,6 +816,9 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
      * by the next TB we execute under normal cflags.
      */
     if (cpu->cflags_next_tb != -1 && cpu->cflags_next_tb & CF_NOIRQ) {
+
+ LOGIM("RETURN(1) false: cflags_next_tb = 0x%x", cpu->cflags_next_tb);
+
         return false;
     }
 
@@ -822,6 +841,9 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             cpu->interrupt_request &= ~CPU_INTERRUPT_DEBUG;
             cpu->exception_index = EXCP_DEBUG;
             qemu_mutex_unlock_iothread();
+
+ LOGIM("RETURN(2) true");
+
             return true;
         }
 #if !defined(CONFIG_USER_ONLY)
@@ -844,6 +866,9 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             do_cpu_init(x86_cpu);
             cpu->exception_index = EXCP_HALTED;
             qemu_mutex_unlock_iothread();
+
+ LOGIM("RETURN(3) true");
+
             return true;
         }
 #else
@@ -851,6 +876,9 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             replay_interrupt();
             cpu_reset(cpu);
             qemu_mutex_unlock_iothread();
+
+ LOGIM("RETURN(4) true");
+
             return true;
         }
 #endif /* !TARGET_I386 */
@@ -874,6 +902,9 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
                 if (unlikely(cpu->singlestep_enabled)) {
                     cpu->exception_index = EXCP_DEBUG;
                     qemu_mutex_unlock_iothread();
+
+ LOGIM("RETURN(5) true");
+
                     return true;
                 }
                 cpu->exception_index = -1;
@@ -904,8 +935,13 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
         if (cpu->exception_index == -1) {
             cpu->exception_index = EXCP_INTERRUPT;
         }
+
+ LOGIM("RETURN(6) true");
+
         return true;
     }
+
+LOGIM("Last RETURN (false)");
 
     return false;
 }
@@ -917,14 +953,25 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
     int32_t insns_left;
 
     trace_exec_tb(tb, pc);
+
+LOGIM("--> cpu_tb_exec() tb = %p, pc = 0x%lx", tb, pc);
     tb = cpu_tb_exec(cpu, tb, tb_exit);
+LOGIM("<-- cpu_tb_exec() tb_exit = %d", *tb_exit);
+
     if (*tb_exit != TB_EXIT_REQUESTED) {
         *last_tb = tb;
+
+LOGIM("RETURN (1)");
+
         return;
     }
 
     *last_tb = NULL;
+
+LOGIM("--> qatomic_read() ");
     insns_left = qatomic_read(&cpu->neg.icount_decr.u32);
+LOGIM("<-- qatomic_read() ");
+
     if (insns_left < 0) {
         /* Something asked us to stop executing chained TBs; just
          * continue round the main loop. Whatever requested the exit
@@ -933,6 +980,8 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
          * cpu_handle_interrupt.  cpu_handle_interrupt will also
          * clear cpu->icount_decr.u16.high.
          */
+
+LOGIM("RETURN (2)");
         return;
     }
 
@@ -940,7 +989,11 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
     assert(icount_enabled());
 #ifndef CONFIG_USER_ONLY
     /* Ensure global icount has gone forward */
+
+LOGIM("--> icount_update() ");
     icount_update(cpu);
+LOGIM("<-- icount_update() ");
+
     /* Refill decrementer and continue execution.  */
     insns_left = MIN(0xffff, cpu->icount_budget);
     cpu->neg.icount_decr.u16.low = insns_left;
@@ -957,6 +1010,9 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
         cpu->cflags_next_tb = (tb->cflags & ~CF_COUNT_MASK) | insns_left;
     }
 #endif
+
+LOGIM("RETURN (3)");
+
 }
 
 /* main execution loop */
@@ -964,12 +1020,14 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
 static int __attribute__((noinline))
 cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
 {
-    int ret;
+    int ret = 0;
 
     /* if an exception is pending, we execute it here */
     while (!cpu_handle_exception(cpu, &ret)) {
         TranslationBlock *last_tb = NULL;
         int tb_exit = 0;
+
+LOGIM("<--cpu_handle_exception() ret = %d", ret);
 
         while (!cpu_handle_interrupt(cpu, &last_tb)) {
             TranslationBlock *tb;
@@ -978,6 +1036,7 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
             uint32_t flags, cflags;
 
             cpu_get_tb_cpu_state(cpu_env(cpu), &pc, &cs_base, &flags);
+LOGIM("<--cpu_get_tb_state() pc = 0x%lx", pc);
 
             /*
              * When requested, use an exact setting for cflags for the next
@@ -998,6 +1057,8 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
             }
 
             tb = tb_lookup(cpu, pc, cs_base, flags, cflags);
+LOGIM("<-- tb_lookup() tb = %p", tb);
+
             if (tb == NULL) {
                 CPUJumpCache *jc;
                 uint32_t h;
@@ -1005,6 +1066,8 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
                 mmap_lock();
                 tb = tb_gen_code(cpu, pc, cs_base, flags, cflags);
                 mmap_unlock();
+
+LOGIM("<-- tb_gen_code() tb = %p", tb);
 
                 /*
                  * We add the TB in the virtual pc hash table
@@ -1038,24 +1101,33 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
                 tb_add_jump(last_tb, tb_exit, tb);
             }
 
+LOGIM("--> cpu_loop_exec_tb () pc = 0x%lx, tb = %p", pc, tb);
             cpu_loop_exec_tb(cpu, tb, pc, &last_tb, &tb_exit);
+LOGIM("<-- cpu_loop_exec_tb () last_tb = %p", last_tb);
 
             /* Try to align the host and virtual clocks
                if the guest is in advance */
             align_clocks(sc, cpu);
         }
     }
+
+LOGIM("RETURN ret = %d",  ret);
     return ret;
 }
 
 static int cpu_exec_setjmp(CPUState *cpu, SyncClocks *sc)
 {
+    int rc = 0;
     /* Prepare setjmp context for exception handling. */
     if (unlikely(sigsetjmp(cpu->jmp_env, 0) != 0)) {
         cpu_exec_longjmp_cleanup(cpu);
     }
 
-    return cpu_exec_loop(cpu, sc);
+LOGIM("--> cpu_exec_loop(cpuidx = %d)", cpu->cpu_index);
+    rc = cpu_exec_loop(cpu, sc);
+LOGIM("<-- cpu_exec_loop() rc = %d", rc);
+
+    return rc;
 }
 
 int cpu_exec(CPUState *cpu)
@@ -1071,6 +1143,8 @@ int cpu_exec(CPUState *cpu)
     }
 
     rcu_read_lock();
+
+LOGIM("--> cpu_exec_enter (cpuidx = %d)", cpu->cpu_index);
     cpu_exec_enter(cpu);
 
     /*
@@ -1081,11 +1155,13 @@ int cpu_exec(CPUState *cpu)
      */
     init_delay_params(&sc, cpu);
 
+LOGIM("--> cpu_exec_setjmp (cpuidx = %d)", cpu->cpu_index);
     ret = cpu_exec_setjmp(cpu, &sc);
 
+LOGIM("--> cpu_exec_exit (cpuidx = %d)", cpu->cpu_index);
     cpu_exec_exit(cpu);
-    rcu_read_unlock();
 
+    rcu_read_unlock();
     return ret;
 }
 

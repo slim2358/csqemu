@@ -12,6 +12,8 @@
 
 #include "qemu/osdep.h"
 #include "qemu/accel.h"
+#include "qemu/log.h"
+
 #include "sysemu/replay.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
@@ -1503,6 +1505,8 @@ void machine_run_board_init(MachineState *machine, const char *mem_path, Error *
         object_register_sugar_prop(TYPE_VIRTIO_DEVICE, "iommu_platform",
                                    "on", false);
     }
+
+LOGIM ("-->accel_init_interfaces()");
 
     accel_init_interfaces(ACCEL_GET_CLASS(machine->accelerator));
     machine_class->init(machine);

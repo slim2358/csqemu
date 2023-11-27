@@ -73,6 +73,8 @@ static void *mttcg_cpu_thread_fn(void *arg)
     assert(tcg_enabled());
     g_assert(!icount_enabled());
 
+LOGIM("cpu = %p", cpu);
+
     rcu_register_thread();
     force_rcu.notifier.notify = mttcg_force_rcu;
     force_rcu.cpu = cpu;
@@ -91,18 +93,25 @@ static void *mttcg_cpu_thread_fn(void *arg)
     /* process any pending work */
     cpu->exit_request = 1;
 
+    bool stopped = cpu_is_stopped (cpu);
     do {
+
+LOGIM("--> cpu_can_run (cpuid = %d) stop=%d, stopped=%d", cpu->cpu_index, cpu->stop, stopped);
+
         if (cpu_can_run(cpu)) {
             int r;
             qemu_mutex_unlock_iothread();
 
+LOGIM("--> tcg_cpus_exec (cpu = %p)", cpu);
             r = tcg_cpus_exec(cpu);
+LOGIM("<-- tcg_cpus_exec () r = %d", r);
+
             qemu_mutex_lock_iothread();
             switch (r) {
             case EXCP_DEBUG:
                 cpu_handle_guest_debug(cpu);
                 break;
-            case EXCP_HALTED:
+             case EXCP_HALTED:
                 /*
                  * Usually cpu->halted is set, but may have already been
                  * reset by another thread by the time we arrive here.
@@ -110,6 +119,8 @@ static void *mttcg_cpu_thread_fn(void *arg)
                 break;
             case EXCP_ATOMIC:
                 qemu_mutex_unlock_iothread();
+
+LOGIM("--> cpus_exec_step_atomic (cpu = %p)", cpu);
                 cpu_exec_step_atomic(cpu);
                 qemu_mutex_lock_iothread();
             default:
@@ -119,8 +130,13 @@ static void *mttcg_cpu_thread_fn(void *arg)
         }
 
         qatomic_set_mb(&cpu->exit_request, 0);
+
+LOGIM("--> qemu_wait_io_event (cpu = %p)", cpu);
+
         qemu_wait_io_event(cpu);
     } while (!cpu->unplug || cpu_can_run(cpu));
+
+LOGIM("--> tcg_cpus_destroy (cpu = %p)", cpu);
 
     tcg_cpus_destroy(cpu);
     qemu_mutex_unlock_iothread();

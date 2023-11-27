@@ -2606,6 +2606,9 @@ static void qemu_init_board(void)
     qemu_plugin_load_list(&plugin_list, &error_fatal);
 
     /* From here on we enter MACHINE_PHASE_INITIALIZED.  */
+
+LOGIM("-->machine_run_board_init()");
+
     machine_run_board_init(current_machine, mem_path, &error_fatal);
 
     drive_check_orphaned();
@@ -2696,6 +2699,8 @@ void qmp_x_exit_preconfig(Error **errp)
         error_setg(errp, "The command is permitted only before machine initialization");
         return;
     }
+
+LOGIM("--> qemu_init_board()");
 
     qemu_init_board();
     qemu_create_cli_devices();
@@ -3747,6 +3752,8 @@ void qemu_init(int argc, char **argv)
     }
 
     if (!preconfig_requested) {
+
+LOGIM("--> qmp_x_exit_preconfig()");
         qmp_x_exit_preconfig(&error_fatal);
     }
     qemu_init_displays();

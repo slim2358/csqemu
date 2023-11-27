@@ -75,8 +75,16 @@ int tcg_cpus_exec(CPUState *cpu)
     int ret;
 
     assert(tcg_enabled());
+
+LOGIM("--> cpu_exec_start (cpu = %p)", cpu);
+
     cpu_exec_start(cpu);
+
+LOGIM("--> cpu_exec (cpu = %p)", cpu);
     ret = cpu_exec(cpu);
+LOGIM("<-- cpu_exec () ret = %d", ret);
+LOGIM("<-- cpu_exec () INTRP=%d, HIT HLT=%d, DBG=%d, HALTED=%d, YLD=%d, ATOMIC=%d ", EXCP_INTERRUPT, EXCP_HLT, EXCP_DEBUG, EXCP_HALTED, EXCP_YIELD, EXCP_ATOMIC);
+
     cpu_exec_end(cpu);
     return ret;
 }

@@ -1041,6 +1041,8 @@ static void riscv_cpu_realize(DeviceState *dev, Error **errp)
     }
 #endif
 
+LOGIM("--> qemu_init_vcpu()");
+
     qemu_init_vcpu(cs);
     cpu_reset(cs);
 
@@ -1562,7 +1564,9 @@ static void riscv_cpu_class_init(ObjectClass *c, void *data)
     DeviceClass *dc = DEVICE_CLASS(c);
     ResettableClass *rc = RESETTABLE_CLASS(c);
 
-    device_class_set_parent_realize(dc, riscv_cpu_realize,
+LOGIM("--..arg..-> riscv_cpu_realize()");
+
+ device_class_set_parent_realize(dc, riscv_cpu_realize,
                                     &mcc->parent_realize);
 
     resettable_class_set_parent_phases(rc, NULL, riscv_cpu_reset_hold, NULL,

@@ -69,7 +69,7 @@ void qemu_simple_log (const char *F, const char *FN, const  char *fmt, ...)
         return;
     } 
     va_list ap;
-    fprintf(im_log_fp, "=== %s : %s() :",  F, FN);
+    fprintf(im_log_fp, "= (%ld) %s : %s() :",  pthread_self(), F, FN);
     va_start (ap, fmt);
     vfprintf (im_log_fp, fmt, ap);
     

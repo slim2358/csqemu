@@ -19,6 +19,9 @@
 
 #include "qemu/osdep.h"
 #include "qemu/main-loop.h"
+
+#include "qemu/log.h"
+
 #include "hw/core/tcg-cpu-ops.h"
 #include "exec/exec-all.h"
 #include "exec/memory.h"
@@ -1349,7 +1352,13 @@ io_prepare(hwaddr *out_offset, CPUState *cpu, hwaddr xlat,
     section = iotlb_to_section(cpu, xlat, attrs);
     mr_offset = (xlat & TARGET_PAGE_MASK) + addr;
     cpu->mem_io_pc = retaddr;
+
+LOGIM("CPU->neg.can_do_io = %d", cpu->neg.can_do_io); 
+
     if (!cpu->neg.can_do_io) {
+
+LOGIM("--> cpu_io_recomplie()"); 
+
         cpu_io_recompile(cpu, retaddr);
     }
 

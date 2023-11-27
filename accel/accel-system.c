@@ -28,6 +28,7 @@
 #include "hw/boards.h"
 #include "sysemu/cpus.h"
 #include "qemu/error-report.h"
+#include "qemu/log.h"
 #include "accel-system.h"
 
 int accel_init_machine(AccelState *accel, MachineState *ms)
@@ -87,6 +88,8 @@ void accel_init_ops_interfaces(AccelClass *ac)
      */
     g_assert(ops != NULL);
     if (ops->ops_init) {
+
+LOGIM("-->fptr(ops_init)");
         ops->ops_init(ops);
     }
     cpus_register_accel(ops);
