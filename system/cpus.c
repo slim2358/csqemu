@@ -242,6 +242,8 @@ static void generic_handle_interrupt(CPUState *cpu, int mask)
     cpu->interrupt_request |= mask;
 
     if (!qemu_cpu_is_self(cpu)) {
+
+LOGIM("--> qemu_cpu_kick()");
         qemu_cpu_kick(cpu);
     }
 }
@@ -419,18 +421,28 @@ void qemu_wait_io_event(CPUState *cpu)
 {
     bool slept = false;
 
+LOGIM("IDLE = %d", cpu_thread_is_idle(cpu));
+
     while (cpu_thread_is_idle(cpu)) {
         if (!slept) {
             slept = true;
             qemu_plugin_vcpu_idle_cb(cpu);
         }
+
+LOGIM("--> qemu_cond_wait() CPU = %p, HALT_COND", cpu);
         qemu_cond_wait(cpu->halt_cond, &qemu_global_mutex);
+LOGIM("<-- qemu_cond_wait() CPU = %p, HALT_COND", cpu);
+
     }
+
+
     if (slept) {
         qemu_plugin_vcpu_resume_cb(cpu);
     }
 
+LOGIM("--> qemu_wait_Io_event_common()");
     qemu_wait_io_event_common(cpu);
+LOGIM("<-- qemu_wait_Io_event_common()");
 }
 
 void cpus_kick_thread(CPUState *cpu)
@@ -453,6 +465,9 @@ void cpus_kick_thread(CPUState *cpu)
 
 void qemu_cpu_kick(CPUState *cpu)
 {
+
+LOGIM ("--> qemu_cond_broadcast() CPU = %p, HALT_COND", cpu);
+
     qemu_cond_broadcast(cpu->halt_cond);
     if (cpus_accel->kick_vcpu_thread) {
         cpus_accel->kick_vcpu_thread(cpu);
@@ -557,6 +572,7 @@ void pause_all_vcpus(void)
             qemu_cpu_stop(cpu, true);
         } else {
             cpu->stop = true;
+LOGIM("--> qemu_cpu_kick()");
             qemu_cpu_kick(cpu);
         }
     }
@@ -569,6 +585,8 @@ void pause_all_vcpus(void)
     while (!all_vcpus_paused()) {
         qemu_cond_wait(&qemu_pause_cond, &qemu_global_mutex);
         CPU_FOREACH(cpu) {
+
+LOGIM("--> qemu_cpu_kick()");
             qemu_cpu_kick(cpu);
         }
     }
@@ -582,6 +600,7 @@ void cpu_resume(CPUState *cpu)
 {
     cpu->stop = false;
     cpu->stopped = false;
+LOGIM("--> qemu_cpu_kick()");
     qemu_cpu_kick(cpu);
 }
 
@@ -603,6 +622,7 @@ void cpu_remove_sync(CPUState *cpu)
 {
     cpu->stop = true;
     cpu->unplug = true;
+LOGIM("--> qemu_cpu_kick()");
     qemu_cpu_kick(cpu);
     qemu_mutex_unlock_iothread();
     qemu_thread_join(cpu->thread);
@@ -647,10 +667,13 @@ LOGIM("--> create_vcpu_thread() cpu = %p, cpu->created = %d", cpu, cpu->created)
 
     cpus_accel->create_vcpu_thread(cpu);
 
+    /*
+     * CPU->create flag is merely set when CPU thread is launched.
+     */
+LOGIM("--> qemu_cond_wait() cpu->created = %d", cpu->created);
     while (!cpu->created) {
         qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
     }
-
 LOGIM("<-- qemu_cond_wait() cpu->created = %d", cpu->created);
 
 }

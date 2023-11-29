@@ -30,6 +30,9 @@
 #include "sysemu/cpu-timers.h"
 #include "qemu/main-loop.h"
 #include "qemu/notify.h"
+
+#include "qemu/log.h"
+
 #include "qemu/guest-random.h"
 #include "exec/exec-all.h"
 #include "tcg/startup.h"
@@ -198,12 +201,17 @@ static void *rr_cpu_thread_fn(void *arg)
 
     /* wait for initial kick-off after machine start */
     while (first_cpu->stopped) {
+
+LOGIM ("--> qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
         qemu_cond_wait_iothread(first_cpu->halt_cond);
+LOGIM ("<-- qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
 
         /* process any pending work */
         CPU_FOREACH(cpu) {
             current_cpu = cpu;
+LOGIM ("--> qemu_wait_io_event_common() CPU = %p, HALT_COND", cpu);
             qemu_wait_io_event_common(cpu);
+LOGIM ("<-- qemu_wait_io_event_common() CPU = %p, HALT_COND", cpu);
         }
     }
 
@@ -215,6 +223,9 @@ static void *rr_cpu_thread_fn(void *arg)
     cpu->exit_request = 1;
 
     while (1) {
+
+LOGIM ("------ INFINITE LOOP ------");
+
         /* Only used for icount_enabled() */
         int64_t cpu_budget = 0;
 
@@ -259,8 +270,10 @@ static void *rr_cpu_thread_fn(void *arg)
                     icount_prepare_for_run(cpu, cpu_budget);
                 }
 
-		printf ("tcg-accel-ops-rr.c : %s(): ----> tcg_cpus_exec()\n", __FUNCTION__);
+LOGIM ("--> tcg_cpus_exec() cpu = %p", cpu);
                 r = tcg_cpus_exec(cpu);
+LOGIM ("<-- tcg_cpus_exec() cpu = %p", cpu);
+
                 if (icount_enabled()) {
                     icount_process_data(cpu);
                 }
@@ -303,6 +316,8 @@ static void *rr_cpu_thread_fn(void *arg)
         rr_wait_io_event();
         rr_deal_with_unplugged_cpus();
     }
+
+LOGIM ("------ END OF LOOP - RET ------");
 
     rcu_remove_force_rcu_notifier(&force_rcu);
     rcu_unregister_thread();

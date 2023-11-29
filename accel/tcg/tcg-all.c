@@ -33,6 +33,9 @@
 #include "qemu/error-report.h"
 #include "qemu/accel.h"
 #include "qemu/atomic.h"
+
+#include "qemu/log.h"
+
 #include "qapi/qapi-builtin-visit.h"
 #include "qemu/units.h"
 #if !defined(CONFIG_USER_ONLY)
@@ -110,6 +113,9 @@ static int tcg_init_machine(MachineState *ms)
 #endif
 
     tcg_allowed = true;
+
+LOGIM("mttcg_enabled <== %d", s->mttcg_enabled);
+
     mttcg_enabled = s->mttcg_enabled;
 
     page_init();
@@ -137,6 +143,8 @@ static char *tcg_get_thread(Object *obj, Error **errp)
 static void tcg_set_thread(Object *obj, const char *value, Error **errp)
 {
     TCGState *s = TCG_STATE(obj);
+
+LOGIM("VAL = %s", value);
 
     if (strcmp(value, "multi") == 0) {
         if (TCG_OVERSIZED_GUEST) {

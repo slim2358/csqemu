@@ -43,7 +43,9 @@
 #include "qemu/config-file.h"
 #include "qemu/error-report.h"
 #include "qemu/qemu-print.h"
+
 #include "qemu/log.h"
+
 #include "qemu/memalign.h"
 #include "exec/memory.h"
 #include "exec/ioport.h"
@@ -768,6 +770,9 @@ void cpu_address_space_init(CPUState *cpu, int asidx,
     newas->as = as;
     if (tcg_enabled()) {
         newas->tcg_as_listener.log_global_after_sync = tcg_log_global_after_sync;
+
+	LOGIM("tcg_as_listener.commit <== tcg_commit, HWADDR = 0x%lx, ASI = %d", mr->addr, asidx);
+
         newas->tcg_as_listener.commit = tcg_commit;
         newas->tcg_as_listener.name = "tcg";
         memory_listener_register(&newas->tcg_as_listener, as);
@@ -2544,6 +2549,9 @@ static void tcg_commit(MemoryListener *listener)
      * all of the tcg machinery for run-on is initialized: thus halt_cond.
      */
     if (cpu->halt_cond) {
+
+LOGIM("--> async_run_on_cpu(), FUNC = tcg_commit_cpu");
+
         async_run_on_cpu(cpu, tcg_commit_cpu, RUN_ON_CPU_HOST_PTR(cpuas));
     } else {
         tcg_commit_cpu(cpu, RUN_ON_CPU_HOST_PTR(cpuas));

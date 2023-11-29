@@ -32,6 +32,8 @@
 #include <SDL.h>
 #endif
 
+int cosim_mode = false;
+
 int qemu_default_main(void)
 { 
     int status = 0;
@@ -54,18 +56,21 @@ int main(int argc, char **argv)
     }
 
     bool iam_qemu_so = (strcmp (argv[argc - 1], "-cosim") == 0);
+    cosim_mode = iam_qemu_so;
     if (iam_qemu_so) {
         argc--;
     }
     qemu_init (argc, argv);
 
+LOGIM ("<------ qemu_init()");
+
+#if 1
     if (iam_qemu_so) {
         printf("%s() ---- RETURN from QEMU\n", __FUNCTION__);
         return 0;
     }
+#endif 
       
-LOGIM ("<------ qemu_init()");
-
     return qemu_main();
 }
 

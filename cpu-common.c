@@ -23,6 +23,9 @@
 #include "hw/core/cpu.h"
 #include "sysemu/cpus.h"
 #include "qemu/lockable.h"
+
+#include "qemu/log.h"
+
 #include "trace/trace-root.h"
 
 QemuMutex qemu_cpu_list_lock;
@@ -173,6 +176,8 @@ void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data data)
     wi->func = func;
     wi->data = data;
     wi->free = true;
+
+LOGIM("--> queue_work_on_cpu(), FUNC = %p", func);
 
     queue_work_on_cpu(cpu, wi);
 }

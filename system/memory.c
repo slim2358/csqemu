@@ -23,6 +23,10 @@
 #include "qemu/main-loop.h"
 #include "qemu/qemu-print.h"
 #include "qom/object.h"
+
+
+#include "qemu/log.h"
+
 #include "trace.h"
 
 #include "exec/memory-internal.h"
@@ -1134,7 +1138,11 @@ void memory_region_transaction_commit(void)
             }
             memory_region_update_pending = false;
             ioeventfd_update_pending = false;
+
+LOGIM("--> MEMORY_LISTENER_CALL_GLOBAL()");
             MEMORY_LISTENER_CALL_GLOBAL(commit, Forward);
+LOGIM("<-- MEMORY_LISTENER_CALL_GLOBAL()");
+
         } else if (ioeventfd_update_pending) {
             QTAILQ_FOREACH(as, &address_spaces, address_spaces_link) {
                 address_space_update_ioeventfds(as);
@@ -3030,6 +3038,9 @@ static void listener_add_address_space(MemoryListener *listener,
         }
     }
     if (listener->commit) {
+
+LOGIM("--> listener.commit(), AS_NAME = %s, addr = 0x%lx", as->name, as->root->addr);
+
         listener->commit(listener);
     }
     flatview_unref(view);
