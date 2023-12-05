@@ -150,6 +150,15 @@ static void init_delay_params(SyncClocks *sc, const CPUState *cpu)
 }
 #endif /* CONFIG USER ONLY */
 
+static vaddr get_current_pc (CPUState *cpu)
+{
+    vaddr pc;
+    uint64_t cs_base;
+    uint32_t flags;
+    cpu_get_tb_cpu_state(cpu_env(cpu), &pc, &cs_base, &flags);
+    return pc;
+}
+
 uint32_t curr_cflags(CPUState *cpu)
 {
     uint32_t cflags = cpu->tcg_cflags;
@@ -423,7 +432,14 @@ const void *HELPER(lookup_tb_ptr)(CPUArchState *env)
         cpu_loop_exit(cpu);
     }
 
+LOGIM("--HELPER--> tb_lookup() pc = 0x%lx, cosim_mode = %d", pc, cpu->cosim_mode);
+
     tb = tb_lookup(cpu, pc, cs_base, flags, cflags);
+
+    if (cpu->cosim_mode) {
+        tb = NULL;
+    }
+
     if (tb == NULL) {
         return tcg_code_gen_epilogue;
     }
@@ -452,20 +468,23 @@ cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
     uintptr_t ret;
     TranslationBlock *last_tb;
     const void *tb_ptr = itb->tc.ptr;
+    vaddr pc;
 
-LOGIM("tb = %p", itb);
+LOGIM("----- tb = %p -------", itb);
 
     if (qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC)) {
         log_cpu_exec(log_pc(cpu, itb), cpu, itb);
     }
 
+LOGIM("--> qemu_thread_jit_execute()");
     qemu_thread_jit_execute();
-
 LOGIM("<-- qemu_thread_jit_execute()");
 
-    ret = tcg_qemu_tb_exec(env, tb_ptr);
 
-LOGIM("<-- tcg_qemu_tb_exec()");
+LOGIM("====> tcg_qemu_tb_exec() JUMP to GENCODE");
+    ret = tcg_qemu_tb_exec(env, tb_ptr);
+    pc = get_current_pc (cpu);
+LOGIM("<==== tcg_qemu_tb_exec(), PC = 0x%lx", pc);
 
     cpu->neg.can_do_io = true;
     qemu_plugin_disable_mem_helpers(cpu);
@@ -485,7 +504,7 @@ LOGIM("<-- tcg_splitwx_to_rw()");
     *tb_exit = ret & TB_EXIT_MASK;
 
     trace_exec_tb_exit(last_tb, *tb_exit);
-    LOGIM("<-- trace_exec_tb_exit() tb_exit = %d ", *tb_exit);
+LOGIM("<-- trace_exec_tb_exit() tb_exit = %d ", *tb_exit);
 
     if (*tb_exit > TB_EXIT_IDX1) {
         /* We didn't start executing this TB (eg because the instruction
@@ -520,6 +539,8 @@ LOGIM("<-- tcg_splitwx_to_rw()");
         cpu->exception_index = EXCP_DEBUG;
         cpu_loop_exit(cpu);
     }
+
+LOGIM("----  RETURN -----");
 
     return last_tb;
 }
@@ -696,6 +717,7 @@ static inline bool cpu_handle_halt(CPUState *cpu)
 #if defined(TARGET_I386)
         if (cpu->interrupt_request & CPU_INTERRUPT_POLL) {
             X86CPU *x86_cpu = X86_CPU(cpu);
+	    //SL: Why target X86 requires LOCK here ?
             qemu_mutex_lock_iothread();
             apic_poll_irq(x86_cpu->apic_state);
             cpu_reset_interrupt(cpu, CPU_INTERRUPT_POLL);
@@ -748,6 +770,9 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         if (*ret == EXCP_DEBUG) {
             cpu_handle_debug_exception(cpu);
         }
+
+LOGIM("excp index = %d, <== -1 RET true", cpu->exception_index); 
+
         cpu->exception_index = -1;
         return true;
     } else {
@@ -763,9 +788,16 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         cpu->exception_index = -1;
         return true;
 #else
+        //SL: What is the purpose of replay_exception()
         if (replay_exception()) {
             CPUClass *cc = CPU_GET_CLASS(cpu);
+
+            // SL: What is the point of LOCK here ?? 
+LOGIM("--> qemu_mutex_lock_iothread()");
             qemu_mutex_lock_iothread();
+LOGIM("<-- qemu_mutex_lock_iothread()");
+          
+            // SL: Looks like LOCK is needed to call DO_INTERRUPT() 
             cc->tcg_ops->do_interrupt(cpu);
             qemu_mutex_unlock_iothread();
             cpu->exception_index = -1;
@@ -816,9 +848,6 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
      * by the next TB we execute under normal cflags.
      */
     if (cpu->cflags_next_tb != -1 && cpu->cflags_next_tb & CF_NOIRQ) {
-
- LOGIM("RETURN(1) false: cflags_next_tb = 0x%x", cpu->cflags_next_tb);
-
         return false;
     }
 
@@ -831,7 +860,11 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
 
     if (unlikely(qatomic_read(&cpu->interrupt_request))) {
         int interrupt_request;
+
+LOGIM("--> qemu_mutex_lock_iothread()");
         qemu_mutex_lock_iothread();
+LOGIM("<-- qemu_mutex_lock_iothread()");
+
         interrupt_request = cpu->interrupt_request;
         if (unlikely(cpu->singlestep_enabled & SSTEP_NOIRQ)) {
             /* Mask out external interrupts for this step. */
@@ -842,7 +875,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             cpu->exception_index = EXCP_DEBUG;
             qemu_mutex_unlock_iothread();
 
- LOGIM("RETURN(2) true");
+LOGIM("RETURN(2) true");
 
             return true;
         }
@@ -867,7 +900,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             cpu->exception_index = EXCP_HALTED;
             qemu_mutex_unlock_iothread();
 
- LOGIM("RETURN(3) true");
+LOGIM("RETURN(3) true");
 
             return true;
         }
@@ -903,7 +936,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
                     cpu->exception_index = EXCP_DEBUG;
                     qemu_mutex_unlock_iothread();
 
- LOGIM("RETURN(5) true");
+LOGIM("RETURN(5) true");
 
                     return true;
                 }
@@ -936,12 +969,10 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             cpu->exception_index = EXCP_INTERRUPT;
         }
 
- LOGIM("RETURN(6) true");
+LOGIM("RETURN(6) true");
 
         return true;
     }
-
-LOGIM("Last RETURN (false)");
 
     return false;
 }
@@ -1037,6 +1068,7 @@ LOGIM("<--cpu_handle_exception() ret = %d", ret);
 
             cpu_get_tb_cpu_state(cpu_env(cpu), &pc, &cs_base, &flags);
 LOGIM("<--cpu_get_tb_state() pc = 0x%lx", pc);
+LOGIM("==========  PC = 0x%lx =============", pc);
 
             /*
              * When requested, use an exact setting for cflags for the next
@@ -1056,6 +1088,7 @@ LOGIM("<--cpu_get_tb_state() pc = 0x%lx", pc);
                 break;
             }
 
+LOGIM("<-- tb_lookup() PC = 0x%lx", pc);
             tb = tb_lookup(cpu, pc, cs_base, flags, cflags);
 LOGIM("<-- tb_lookup() tb = %p", tb);
 
@@ -1063,6 +1096,7 @@ LOGIM("<-- tb_lookup() tb = %p", tb);
                 CPUJumpCache *jc;
                 uint32_t h;
 
+LOGIM("--> tb_gen_code() PC = 0x%lx", pc);
                 mmap_lock();
                 tb = tb_gen_code(cpu, pc, cs_base, flags, cflags);
                 mmap_unlock();
@@ -1160,6 +1194,7 @@ LOGIM("--> cpu_exec_setjmp (cpuidx = %d)", cpu->cpu_index);
 
 LOGIM("--> cpu_exec_exit (cpuidx = %d)", cpu->cpu_index);
     cpu_exec_exit(cpu);
+LOGIM("<-- cpu_exec_exit (cpuidx = %d)", cpu->cpu_index);
 
     rcu_read_unlock();
     return ret;

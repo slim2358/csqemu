@@ -243,6 +243,8 @@ void cpu_exec_initfn(CPUState *cpu)
     cpu->as = NULL;
     cpu->num_ases = 0;
 
+    cpu->cosim_mode = false;
+
 #ifndef CONFIG_USER_ONLY
     cpu->thread_id = qemu_get_thread_id();
     cpu->memory = get_system_memory();

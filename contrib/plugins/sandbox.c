@@ -21,6 +21,12 @@ static void plugin_exit (qemu_plugin_id_t id, void *p);
 static void vcpu_tb_trans (qemu_plugin_id_t id, struct qemu_plugin_tb *tb);
 static void vcpu_mem (unsigned int cpu_index, qemu_plugin_meminfo_t info,
                       uint64_t vaddr, void *udata);
+static void vcpu_insn_exec(unsigned int cpu_index, void *udata);
+
+typedef struct instr_
+{
+    uint64_t pc;
+} Instr_t;
 
 /**
  * Install the plugin
@@ -66,13 +72,26 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
     struct qemu_plugin_insn *insn;
     size_t n = qemu_plugin_tb_n_insns(tb);
 
-    printf ("%s(): ID = %lx, nTb = %d \n", __FUNCTION__, id, n);
+    //    printf ("%s(): ID = %lx, nTb = %d \n", __FUNCTION__, id, n);
+
+    insn = qemu_plugin_tb_get_insn(tb, 0);
+
+    uint64_t tb_pc = qemu_plugin_insn_vaddr(insn);
+    // printf ("== SANDBOX: ==== TB PC = 0x%lx (%d) ====\n", tb_pc, n);    
 
     for (size_t i = 0; i < n; i++) {
         
         uint64_t insn_vaddr;
         uint32_t *pd = NULL;
         uint32_t instr;
+
+        /*
+         * SL: It is very memory consuming to allocate the below structure on
+         *     per instruction basis.
+         *    Yet ... we have to do it becasue per insn callback does not pass any
+         *    internal data and relies on USER DATA provided by this callback
+         */
+        Instr_t *pinstr = (Instr_t *)malloc(sizeof(Instr_t));
 
         /*
          * `insn` is shared between translations in QEMU, copy needed data here.
@@ -86,16 +105,16 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         pd = qemu_plugin_insn_data(insn);
         instr = *pd;
 
+        pinstr->pc = insn_vaddr;
+
         /* Register callback on memory read or write */
         qemu_plugin_register_vcpu_mem_cb(insn, vcpu_mem,
                                          QEMU_PLUGIN_CB_NO_REGS,
                                          QEMU_PLUGIN_MEM_RW, NULL);
-#if 0
 
         /* Register callback on instruction */
         qemu_plugin_register_vcpu_insn_exec_cb(insn, vcpu_insn_exec,
-                                               QEMU_PLUGIN_CB_NO_REGS, NULL);
-#endif
+                                               QEMU_PLUGIN_CB_NO_REGS, pinstr);
 
     }
 }
@@ -128,9 +147,17 @@ static void vcpu_mem(unsigned int cpu_index, qemu_plugin_meminfo_t info,
     if (hwaddr) {
         uint64_t addr = qemu_plugin_hwaddr_phys_addr(hwaddr);
         const char *name = qemu_plugin_hwaddr_device_name(hwaddr);
-        printf ("%s <--->[V: 0x%08"PRIx64"] [P: 0x%08"PRIx64"] <%s>\n", mem_op, vaddr, addr, name);
+        // printf ("%s <--->[V: 0x%08"PRIx64"] [P: 0x%08"PRIx64"] <%s>\n", mem_op, vaddr, addr, name);
     } else {
-        printf ("%s <--->[V: 0x%08"PRIx64"] <%s>\n", mem_op, vaddr);
+        // printf ("%s <--->[V: 0x%08"PRIx64"] <%s>\n", mem_op, vaddr);
     }
 }
 
+///////////////////////////////////////////////////////////////////////
+
+static void vcpu_insn_exec(unsigned int cpu_index, void *udata)
+{
+    Instr_t *pinstr = (Instr_t *)udata;
+    
+    //printf ("== SANDBOX: ==== cpu %d: PC = 0x%lx ====\n", cpu_index, pinstr->pc);    
+}

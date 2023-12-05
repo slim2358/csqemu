@@ -114,7 +114,11 @@ static void rr_wait_io_event(void)
 
     while (all_cpu_threads_idle()) {
         rr_stop_kick_timer();
+
+LOGIM("--> qemu_cond_wait_iothread() HALT_COND");
         qemu_cond_wait_iothread(first_cpu->halt_cond);
+LOGIM("<-- qemu_cond_wait_iothread() HALT_COND");
+
     }
 
     rr_start_kick_timer();
@@ -191,7 +195,10 @@ static void *rr_cpu_thread_fn(void *arg)
     rcu_add_force_rcu_notifier(&force_rcu);
     tcg_register_thread();
 
+LOGIM ("=======> qemu_mutex_lock_iothread() CPU = %p", cpu);
     qemu_mutex_lock_iothread();
+LOGIM ("<======= qemu_mutex_lock_iothread() CPU = %p", cpu);
+ 
     qemu_thread_get_self(cpu->thread);
 
     cpu->thread_id = qemu_get_thread_id();
@@ -202,9 +209,9 @@ static void *rr_cpu_thread_fn(void *arg)
     /* wait for initial kick-off after machine start */
     while (first_cpu->stopped) {
 
-LOGIM ("--> qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
+LOGIM ("=======> qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
         qemu_cond_wait_iothread(first_cpu->halt_cond);
-LOGIM ("<-- qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
+LOGIM ("<====== qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
 
         /* process any pending work */
         CPU_FOREACH(cpu) {
@@ -229,9 +236,14 @@ LOGIM ("------ INFINITE LOOP ------");
         /* Only used for icount_enabled() */
         int64_t cpu_budget = 0;
 
+LOGIM ("=======> qemu_mutex_unlock_iothread() CPU = %p", cpu);
         qemu_mutex_unlock_iothread();
+LOGIM ("<====== qemu_mutex_unlock_iothread() CPU = %p", cpu);
         replay_mutex_lock();
+
+LOGIM ("=======> qemu_mutex_lock_iothread() CPU = %p", cpu);
         qemu_mutex_lock_iothread();
+LOGIM ("<======= qemu_mutex_lock_iothread() CPU = %p", cpu);
 
         if (icount_enabled()) {
             int cpu_count = rr_cpu_count();
@@ -253,6 +265,8 @@ LOGIM ("------ INFINITE LOOP ------");
             cpu = first_cpu;
         }
 
+LOGIM ("---- cpu = %p, cpu_work_list_empy = %d, exit_request = %d", cpu, cpu_work_list_empty(cpu), cpu->exit_request);
+
         while (cpu && cpu_work_list_empty(cpu) && !cpu->exit_request) {
             /* Store rr_current_cpu before evaluating cpu_can_run().  */
             qatomic_set_mb(&rr_current_cpu, cpu);
@@ -265,27 +279,46 @@ LOGIM ("------ INFINITE LOOP ------");
             if (cpu_can_run(cpu)) {
                 int r;
 
+LOGIM ("====> qemu_mutex_unlock_iothread ()");
                 qemu_mutex_unlock_iothread();
+LOGIM ("<==== qemu_mutex_unlock_iothread ()");
+
                 if (icount_enabled()) {
                     icount_prepare_for_run(cpu, cpu_budget);
                 }
 
-LOGIM ("--> tcg_cpus_exec() cpu = %p", cpu);
+LOGIM ("====++++=====> tcg_cpus_exec() cpu = %p", cpu);
                 r = tcg_cpus_exec(cpu);
-LOGIM ("<-- tcg_cpus_exec() cpu = %p", cpu);
+LOGIM ("<====++++===== tcg_cpus_exec() cpu = %p, R = %d", cpu, r);
 
                 if (icount_enabled()) {
                     icount_process_data(cpu);
                 }
+
+LOGIM ("====> qemu_mutex_lock_iothread ()");
                 qemu_mutex_lock_iothread();
+LOGIM ("<==== qemu_mutex_lock_iothread ()");
 
                 if (r == EXCP_DEBUG) {
+LOGIM ("====> cpu_handle_quest_debug() cpu = %p, DBG", cpu);
                     cpu_handle_guest_debug(cpu);
+LOGIM ("<==== cpu_handle_quest_debug() cpu = %p", cpu);
+
                     break;
                 } else if (r == EXCP_ATOMIC) {
+
+LOGIM ("====> qemu_mutex_unlock_thread()");
                     qemu_mutex_unlock_iothread();
+LOGIM ("<==== qemu_mutex_unlock_thread()");
+
+LOGIM ("====> cpu_exec_step_atomic() cpu = %p, ATOMIC", cpu);
                     cpu_exec_step_atomic(cpu);
+LOGIM ("<====  cpu_exec_step_atomic() cpu = %p, ATOMIC", cpu);
+
+LOGIM ("====> qemu_mutex_lock_thread()");
                     qemu_mutex_lock_iothread();
+LOGIM ("====> qemu_mutex_lock_thread()");
+
                     break;
                 }
             } else if (cpu->stop) {
@@ -313,16 +346,24 @@ LOGIM ("<-- tcg_cpus_exec() cpu = %p", cpu);
             qemu_notify_event();
         }
 
+LOGIM("=====> rr_wait_io_event()  HALT_COND");
         rr_wait_io_event();
+LOGIM("<===== rr_wait_io_event()  HALT_COND");
+
         rr_deal_with_unplugged_cpus();
+
+LOGIM ("------ END OF  LOOP ------");
+
     }
 
-LOGIM ("------ END OF LOOP - RET ------");
+LOGIM ("------ OUT OF LOOP -- RETURN ------");
 
     rcu_remove_force_rcu_notifier(&force_rcu);
     rcu_unregister_thread();
     return NULL;
 }
+
+extern int cosim_mode;
 
 void rr_start_vcpu_thread(CPUState *cpu)
 {
@@ -332,6 +373,8 @@ void rr_start_vcpu_thread(CPUState *cpu)
 
     g_assert(tcg_enabled());
     tcg_cpu_init_cflags(cpu, false);
+
+    cpu->cosim_mode = cosim_mode;
 
     if (!single_tcg_cpu_thread) {
         cpu->thread = g_new0(QemuThread, 1);
