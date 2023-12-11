@@ -32,6 +32,7 @@
 #include "qemu/notify.h"
 
 #include "qemu/log.h"
+#include "qemu-main.h"
 
 #include "qemu/guest-random.h"
 #include "exec/exec-all.h"
@@ -363,7 +364,8 @@ LOGIM ("------ OUT OF LOOP -- RETURN ------");
     return NULL;
 }
 
-extern int cosim_mode;
+extern int              cosim_mode;
+extern COSIM_report_t   *COSIM_report_ptr;
 
 void rr_start_vcpu_thread(CPUState *cpu)
 {
@@ -375,6 +377,7 @@ void rr_start_vcpu_thread(CPUState *cpu)
     tcg_cpu_init_cflags(cpu, false);
 
     cpu->cosim_mode = cosim_mode;
+    cpu->cosim_data = (void*)COSIM_report_ptr;
 
     if (!single_tcg_cpu_thread) {
         cpu->thread = g_new0(QemuThread, 1);

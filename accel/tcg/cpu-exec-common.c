@@ -23,6 +23,8 @@
 #include "qemu/plugin.h"
 #include "internal-common.h"
 
+#include "qemu/log.h"
+
 bool tcg_allowed;
 
 /* exit the current TB, but without causing any exception to be raised */
@@ -38,6 +40,8 @@ void cpu_loop_exit(CPUState *cpu)
     cpu->neg.can_do_io = true;
     /* Undo any setting in generated code.  */
     qemu_plugin_disable_mem_helpers(cpu);
+
+LOGIM("====> SIGLONGJMP()");
     siglongjmp(cpu->jmp_env, 1);
 }
 

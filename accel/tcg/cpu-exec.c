@@ -21,6 +21,7 @@
 #include "qemu/qemu-print.h"
 
 #include "qemu/log.h"
+#include "qemu-main.h"
 
 #include "qapi/error.h"
 #include "qapi/type-helpers.h"
@@ -451,6 +452,8 @@ LOGIM("--HELPER--> tb_lookup() pc = 0x%lx, cosim_mode = %d", pc, cpu->cosim_mode
     return tb->tc.ptr;
 }
 
+extern int cosim_mode;
+
 /* Execute a TB, and fix up the CPU state afterwards if necessary */
 /*
  * Disable CFI checks.
@@ -475,16 +478,32 @@ LOGIM("----- tb = %p -------", itb);
     if (qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC)) {
         log_cpu_exec(log_pc(cpu, itb), cpu, itb);
     }
-
+    
 LOGIM("--> qemu_thread_jit_execute()");
     qemu_thread_jit_execute();
 LOGIM("<-- qemu_thread_jit_execute()");
 
 
+///////////////// COSIM //////////////////
+    COSIM_report_t *pr = cpu->cosim_data ;
+    if (pr != NULL) {
+        pr->pc_before = get_current_pc (cpu);
+    }
+/////////////////////////////////////////
+
 LOGIM("====> tcg_qemu_tb_exec() JUMP to GENCODE");
     ret = tcg_qemu_tb_exec(env, tb_ptr);
     pc = get_current_pc (cpu);
 LOGIM("<==== tcg_qemu_tb_exec(), PC = 0x%lx", pc);
+
+///////////////// COSIM ///////////////////
+    if (pr != NULL) {
+        pr->pc_after = pc;
+        pr->cpu_index = cpu->cpu_index;
+        COSIM_report_inst_t func = (COSIM_report_inst_t)(pr->void_report_fn);
+        func (pr);
+    }
+///////////////////////////////////////////
 
     cpu->neg.can_do_io = true;
     qemu_plugin_disable_mem_helpers(cpu);

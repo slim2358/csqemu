@@ -32,7 +32,28 @@
 #include <SDL.h>
 #endif
 
+/*
+ * Temporary location of COSIM stuff - to be moved to separate files 
+ */
+///////////////////////////////////////////////////////////////
+
+extern int cosim_ep (void);
+void qemu_cosim_run (void);
+void qemu_cosim_API (void* opaque_data);
+
+COSIM_register_t *COSIM_api_ptr    = NULL;
+COSIM_report_t   *COSIM_report_ptr = NULL;
+
+#define COSIM_KEY 0x778654
+
+/*
+ * This flag is introduced for COSIM-RTL-QEMU  lockstep mode.
+ * It is propagated to CPUState as well
+ */
+
 int cosim_mode = false;
+
+///////////////////////////////////////////////////////////////
 
 int qemu_default_main(void)
 { 
@@ -41,7 +62,10 @@ int qemu_default_main(void)
 LOGIM("--> qemu_main_loop() status = %d", status);
 
     status = qemu_main_loop();
+    printf ("QEMU:%s() <---- qemu_main_loop() status = %d\n", __FUNCTION__, status);
+
     qemu_cleanup(status);
+    printf ("QEMU:%s() <---- qemu_cleanup() \n", __FUNCTION__);
 
     return status;
 }
@@ -51,8 +75,10 @@ int (*qemu_main)(void) = qemu_default_main;
 int main(int argc, char **argv)
 {
     int i;
+    printf ("QEMU:%s() --------\n", __FUNCTION__);
+
     for (i = 0; i < argc; i++) {
-        printf ("%s() ---- argv [%d] = %s\n ", __FUNCTION__, i, argv[i]);
+        printf ("QEMU:%s() ---- argv [%d] = %s\n ", __FUNCTION__, i, argv[i]);
     }
 
     bool iam_qemu_so = (strcmp (argv[argc - 1], "-cosim") == 0);
@@ -61,19 +87,52 @@ int main(int argc, char **argv)
         argc--;
     }
     qemu_init (argc, argv);
-
 LOGIM ("<------ qemu_init()");
 
-#if 1
-    if (iam_qemu_so) {
-        printf("%s() ---- RETURN from QEMU\n", __FUNCTION__);
-        return 0;
-    }
-#endif 
-      
-    return qemu_main();
+    int rc = qemu_main();
+    printf ("<---- QEMU:%s() RETURN \n", __FUNCTION__);
+    return rc;
 }
 
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 
+void qemu_cosim_run (void)
+{
+    int rc = qemu_main();
+    printf ("QEMU:%s() <-- qemu_main() rc = %d\n", __FUNCTION__, rc);   
+}
 
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+//
+//  The prototype of QEMU-COSIM reporting API.
+//
+///////////////////////////////////////////////////////////////
 
+void qemu_cosim_API (void* opaque_data)
+{
+    COSIM_register_t* p = (COSIM_register_t*)opaque_data;
+    int  cosim_ret_key = p->COSIM_validate_fn ();
+
+    if (cosim_ret_key == COSIM_KEY) {
+        printf ("COSIM is valid! Go ahead ....\n");
+    }
+    else {
+        printf ("COSIM is invlaid - EXIT!\n");
+        exit(0);
+    }
+
+    COSIM_api_ptr = (COSIM_register_t*) malloc(sizeof(COSIM_register_t));
+    *COSIM_api_ptr = *p;
+
+    COSIM_report_ptr = (COSIM_report_t*)malloc(sizeof(COSIM_report_t));
+
+    COSIM_report_ptr->pc_before = 0; 
+    COSIM_report_ptr->pc_after  = 0;
+    COSIM_report_ptr->void_report_fn = (void*)(COSIM_api_ptr->COSIM_insn_report_fn); 
+}
+
+//////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////
