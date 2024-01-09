@@ -5,22 +5,20 @@ Below is the brief explanation of COSIM-QEMU flow:
 3. Determines two QEMU entry points (DLSYM):
   
         MAIN
-        REGISTER API
+        QEMU_step
+        QEMU_pass_sync
 
-4.  COSIM supports only one API function - to report/notify an instruction execution.
-5.  REGISTER API is called and QEMU stores report/notify API function
-6.  COSIM creates the thread,  passes the arguments and QEMU:MAIN entry point to the thread entry point.
-7.  COSIM-thread launches QEMU (see #6)
-8.  COSIM main code meanwhile waits on COND WAIT - waits for the report/notify callback.
-9.  QEMU invokes report/notify callback after an instruction is executed.
-10. For now the above callback delivers PC of the instruction and PC of the next instruction to execute.
-11. For now the exception/interrupt delivery is not implemented
-12. The report/notify csllbck is invoked, the "data for validation" is delivered, the callback  waked up COSIM main code and waits on COND WAIT.
-13. COSIM main code evaluated the "data" and in case of the positive result QEMU thread/callback is waken up.
-11. The "data verification" essentially is  FSEM and RTL comaprison. For now it is not implemented.
+4.  <QEMU_pass_sync> EP delivers mutex/condvar to QEMU. Mutex/condvar are used to synchronize
+    COSIM and QEMU.
+ 
+5.  <QEMU_step> is called by COSIM. Upon this QEMU wakes up CPU thread to execute a single instruction
+    <QEMU_step> hangs on COND_WAIT waiting for QEMU to be  waken up. 
+6.  Upon execution of a single instruction  QEMU CPU thead hangs up on COND_WAIT. 
+    QEMU thread notifies COSIM.  <QEMU_step> is called again... 
 
     TBD
 
-1. Both QEMU and COSIM use the same data types - the common include to be  defined and included
-2. The new COSIM file to be added to QEMU code base.
+1. The current framework is very slow - two many COND_WAIT's.
+   To try to improve performance.
+
  
