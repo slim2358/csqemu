@@ -473,7 +473,7 @@ cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
     const void *tb_ptr = itb->tc.ptr;
     vaddr pc;
 
-LOGIM("----- tb = %p -------", itb);
+LOGIM("-- tb = %p, cpu->cosim_singlestep = %d --", itb, cpu->cosim_singlestep);
 
     if (qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC)) {
         log_cpu_exec(log_pc(cpu, itb), cpu, itb);
@@ -483,27 +483,10 @@ LOGIM("--> qemu_thread_jit_execute()");
     qemu_thread_jit_execute();
 LOGIM("<-- qemu_thread_jit_execute()");
 
-
-///////////////// COSIM //////////////////
-    COSIM_report_t *pr = cpu->cosim_data ;
-    if (pr != NULL) {
-        pr->pc_before = get_current_pc (cpu);
-    }
-/////////////////////////////////////////
-
 LOGIM("====> tcg_qemu_tb_exec() JUMP to GENCODE");
     ret = tcg_qemu_tb_exec(env, tb_ptr);
     pc = get_current_pc (cpu);
 LOGIM("<==== tcg_qemu_tb_exec(), PC = 0x%lx", pc);
-
-///////////////// COSIM ///////////////////
-    if (pr != NULL) {
-        pr->pc_after = pc;
-        pr->cpu_index = cpu->cpu_index;
-        COSIM_report_inst_t func = (COSIM_report_inst_t)(pr->void_report_fn);
-        func (pr);
-    }
-///////////////////////////////////////////
 
     cpu->neg.can_do_io = true;
     qemu_plugin_disable_mem_helpers(cpu);
@@ -558,6 +541,22 @@ LOGIM("<-- trace_exec_tb_exit() tb_exit = %d ", *tb_exit);
         cpu->exception_index = EXCP_DEBUG;
         cpu_loop_exit(cpu);
     }
+
+    /////////////// COSIM ////////////////   
+
+    COSIM_data_t* pgd = NULL;
+
+    if ((pgd = (COSIM_data_t*)cpu->cosim_data) != NULL) {
+        if (unlikely(cpu->cosim_singlestep) && cpu->exception_index == -1) {
+            pgd = (COSIM_data_t*)cpu->cosim_data;
+            pgd->state_pc = get_current_pc (cpu);
+
+            cpu->exception_index = EXCP_COSIM;
+            cpu_loop_exit(cpu);
+        }
+    }
+
+    /////////////// COSIM ////////////////   
 
 LOGIM("----  RETURN -----");
 
@@ -786,6 +785,14 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
     if (cpu->exception_index >= EXCP_INTERRUPT) {
         /* exit request from the cpu execution loop */
         *ret = cpu->exception_index;
+   
+        ////////////////// COSIM //////////////////
+        if (*ret == EXCP_COSIM) {
+LOGIM ("==== hit EXCP_COSIM and return TRUE");
+            // For now there is nothing to do  for COSIM mode
+        }
+        ////////////////// COSIM //////////////////
+
         if (*ret == EXCP_DEBUG) {
             cpu_handle_debug_exception(cpu);
         }

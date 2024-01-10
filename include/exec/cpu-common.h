@@ -14,6 +14,9 @@
 #define EXCP_YIELD      0x10004 /* cpu wants to yield timeslice to another */
 #define EXCP_ATOMIC     0x10005 /* stop-the-world and emulate atomic */
 
+///////// COSIM /////////
+#define EXCP_COSIM      0x10006 /* cpu stopped after single instruction was executed by COSIM  */
+
 /**
  * vaddr:
  * Type wide enough to contain any #target_ulong virtual address.

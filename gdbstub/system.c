@@ -30,6 +30,8 @@
 #include "trace.h"
 #include "internals.h"
 
+#include "qemu/log.h"
+
 /* System emulation specific state */
 typedef struct {
     CharBackend chr;
@@ -95,6 +97,8 @@ static void gdb_chr_event(void *opaque, QEMUChrEvent event)
         s->c_cpu = gdb_first_attached_cpu();
         s->g_cpu = s->c_cpu;
 
+LOGIM("----> vm_stop(RUN_STATE_PAUSED)");
+
         vm_stop(RUN_STATE_PAUSED);
         replay_gdb_attached();
         break;
@@ -113,6 +117,8 @@ static void gdb_chr_event(void *opaque, QEMUChrEvent event)
  */
 void gdb_syscall_handling(const char *syscall_packet)
 {
+LOGIM("----> vm_stop(RUN_STATE_DEBUG)");
+
     vm_stop(RUN_STATE_DEBUG);
     qemu_cpu_kick(gdbserver_state.c_cpu);
 }
@@ -548,6 +554,8 @@ void gdb_continue(void)
 {
     if (!runstate_needs_reset()) {
         trace_gdbstub_op_continue();
+
+LOGIM("GDB: --> vm_start()");
         vm_start();
     }
 }
@@ -582,11 +590,15 @@ int gdb_continue_partial(char *newstates)
             case 's':
                 trace_gdbstub_op_stepping(cpu->cpu_index);
                 cpu_single_step(cpu, gdbserver_state.sstep_flags);
+
+LOGIM("--> cpu_resume() -- STEPI");
                 cpu_resume(cpu);
                 flag = 1;
                 break;
             case 'c':
                 trace_gdbstub_op_continue_cpu(cpu->cpu_index);
+
+LOGIM("--> cpu_resume() -- CONT");
                 cpu_resume(cpu);
                 flag = 1;
                 break;

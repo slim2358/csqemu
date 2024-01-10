@@ -61,6 +61,8 @@
 #include "sysemu/tpm.h"
 #include "trace.h"
 
+#include  "qemu-main.h"
+
 static NotifierList exit_notifiers =
     NOTIFIER_LIST_INITIALIZER(exit_notifiers);
 
@@ -390,6 +392,9 @@ static int shutdown_signal;
 static pid_t shutdown_pid;
 static int powerdown_requested;
 static int debug_requested;
+
+static int cosim_requested = 0;
+
 static int suspend_requested;
 static WakeupReason wakeup_reason;
 static NotifierList powerdown_notifiers =
@@ -476,6 +481,15 @@ static int qemu_debug_requested(void)
     debug_requested = 0;
     return r;
 }
+
+/////////////// COSIM /////////////////
+static int qemu_cosim_requested(void)
+{
+    int r = cosim_requested;
+    cosim_requested = 0;
+    return r;
+}
+/////////////// COSIM /////////////////
 
 /*
  * Reset the VM. Issue an event unless @reason is SHUTDOWN_CAUSE_NONE.
@@ -715,10 +729,40 @@ void qemu_system_debug_request(void)
     qemu_notify_event();
 }
 
+/////////////// COSIM ///////////////////
+extern int           cosim_mode;
+extern COSIM_data_t  *COSIM_glue_data;
+
+void qemu_system_cosim_request(void)
+{
+    cosim_requested = 1;
+}
+
+static void vm_cosim_notify (void)
+{
+    //printf ("%s() ++++>  LOCK (mutex = %p ) \n", __FUNCTION__, COSIM_glue_data->cosim_mutex); 
+    pthread_mutex_lock (COSIM_glue_data->cosim_mutex);
+    //printf ("%s() <++++  LOCK (mutex = %p ) \n", __FUNCTION__, COSIM_glue_data->cosim_mutex); 
+    //printf ("%s() ++++>  COND_BROADCAST (cond = %p ) \n", __FUNCTION__, COSIM_glue_data->cosim_cond); 
+    pthread_cond_broadcast (COSIM_glue_data->cosim_cond);
+    pthread_mutex_unlock (COSIM_glue_data->cosim_mutex);
+}
+/////////////// COSIM ///////////////////
+
 static bool main_loop_should_exit(int *status)
 {
     RunState r;
     ShutdownCause request;
+
+    if (qemu_cosim_requested ()) {
+LOGIM("<---- qemu_cosim_requested() ==> vm_cosim_notify()");
+        /*
+         * Here we make a shortcut and call the local notify function.
+         * Likeley it is overkill to call vm_stop() with the new parameter
+         * and todo something more than just COSIM notification.
+         */ 
+        vm_cosim_notify();
+    }
 
     if (qemu_debug_requested()) {
         vm_stop(RUN_STATE_DEBUG);
@@ -743,9 +787,14 @@ static bool main_loop_should_exit(int *status)
         }
     }
     request = qemu_reset_requested();
+
+LOGIM("<---- qemu_reset_requeted()  requested = %d ", request);
+
     if (request) {
         pause_all_vcpus();
         qemu_system_reset(request);
+
+LOGIM("----> resume_all_vcpus() ----");
         resume_all_vcpus();
         /*
          * runstate can change in pause_all_vcpus()
@@ -782,8 +831,8 @@ LOGIM("--> main_loop_should_exit()");
 
     while (!main_loop_should_exit(&status)) {
 
-LOGIM ("<-- main_loop_exit() status = %d ", status);
-LOGIM ("---> main_loop_wait()");
+LOGIM ("<-- main_loop_should_exit() status = %d ", status);
+LOGIM ("--> main_loop_wait()");
 
         main_loop_wait(false);
 
@@ -820,6 +869,8 @@ void qemu_init_subsystems(void)
 
     qemu_init_cpu_list();
     qemu_init_cpu_loop();
+
+LOGIM ("====> qemu_mutex_lock_iothread()");
     qemu_mutex_lock_iothread();
 
     atexit(qemu_run_exit_notifiers);
@@ -847,13 +898,11 @@ void qemu_init_subsystems(void)
 void qemu_cleanup(int status)
 {
     gdb_exit(status);
-
     /*
      * cleaning up the migration object cancels any existing migration
      * try to do this early so that it also stops using devices.
      */
     migration_shutdown();
-
     /*
      * Close the exports before draining the block layer. The export
      * drivers may have coroutines yielding on it, so we need to clean
@@ -861,12 +910,9 @@ void qemu_cleanup(int status)
      * blk_wait_while_drained().
      */
     blk_exp_close_all();
-
-
     /* No more vcpu or device emulation activity beyond this point */
     vm_shutdown();
     replay_finish();
-
     /*
      * We must cancel all block jobs while the block layer is drained,
      * or cancelling will be affected by throttling and thus may block

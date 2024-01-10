@@ -42,6 +42,9 @@
 #include <sys/prctl.h>
 #endif
 
+#include "qemu/log.h"
+#include <sys/time.h>
+
 /***********************************************************/
 /* timers */
 
@@ -328,12 +331,30 @@ int qemu_timeout_ns_to_ms(int64_t ns)
     return MIN(ms, INT32_MAX);
 }
 
+/////////////////////////////////////////////////
+
+static void print_fds_after (struct pollfd *fds, int n, int rc)
+{
+    int i = 0;
+    for (i = 0; i < n; i++) {
+        if (fds[i].revents != 0) {
+
+LOGIM("<-- qemu_poll_ns() [%d] revent = 0x%x, fd = %d, RC = %d", i, fds[i].revents, fds[i].fd, rc);
+
+        }
+    }
+}
+
+////////////////////////////////////////////////
 
 /* qemu implementation of g_poll which uses a nanosecond timeout but is
  * otherwise identical to g_poll
  */
 int qemu_poll_ns(GPollFD *fds, guint nfds, int64_t timeout)
 {
+LOGIM("==== NFDS = %d, TM = %ld", nfds, timeout);
+
+    int rc;
 #ifdef CONFIG_PPOLL
     if (timeout < 0) {
         return ppoll((struct pollfd *)fds, nfds, NULL, NULL);
@@ -348,11 +369,15 @@ int qemu_poll_ns(GPollFD *fds, guint nfds, int64_t timeout)
         }
         ts.tv_sec = tvsec;
         ts.tv_nsec = timeout % 1000000000LL;
-        return ppoll((struct pollfd *)fds, nfds, &ts, NULL);
+        rc = ppoll((struct pollfd *)fds, nfds, &ts, NULL);
     }
 #else
-    return g_poll(fds, nfds, qemu_timeout_ns_to_ms(timeout));
+    rc = g_poll(fds, nfds, qemu_timeout_ns_to_ms(timeout));
 #endif
+
+    print_fds_after ((struct pollfd *)fds, nfds, rc);
+
+    return rc;
 }
 
 

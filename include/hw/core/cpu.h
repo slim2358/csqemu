@@ -476,8 +476,11 @@ struct CPUState {
     bool stop;
     bool stopped;
 
+    //////////  COSIM //////////
     bool cosim_mode;
     void *cosim_data;
+    int   cosim_singlestep;
+    ////////////////////////////
 
     /* Should CPU start in powered-off state? */
     bool start_powered_off;

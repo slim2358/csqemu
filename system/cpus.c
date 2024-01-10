@@ -87,6 +87,10 @@ bool cpu_work_list_empty(CPUState *cpu)
 
 bool cpu_thread_is_idle(CPUState *cpu)
 {
+    bool rc = false;
+
+LOGIM("++++ cpu_is_stopped():  cpu->stopped = %d, runstate_is_runninng() = %d", cpu->stopped, runstate_is_running());
+
     if (cpu->stop || !cpu_work_list_empty(cpu)) {
         return false;
     }
@@ -97,7 +101,8 @@ bool cpu_thread_is_idle(CPUState *cpu)
         return false;
     }
     if (cpus_accel->cpu_thread_is_idle) {
-        return cpus_accel->cpu_thread_is_idle(cpu);
+        rc = cpus_accel->cpu_thread_is_idle(cpu);
+        return (rc);
     }
     return true;
 }
@@ -242,8 +247,6 @@ static void generic_handle_interrupt(CPUState *cpu, int mask)
     cpu->interrupt_request |= mask;
 
     if (!qemu_cpu_is_self(cpu)) {
-
-LOGIM("--> qemu_cpu_kick()");
         qemu_cpu_kick(cpu);
     }
 }
@@ -297,8 +300,28 @@ bool cpu_can_run(CPUState *cpu)
     return true;
 }
 
+//////////////////  COSIM /////////////////////////////
+/*
+ * Similar to cpu_handle_guest_debug() this function
+ * processes new EXCP_COSIM and makes preparations to notify
+ * COSIM that an instruction is executed
+ */ 
+void cpu_handle_cosim_lockstep(CPUState *cpu)
+{
+    cpu->stopped = true;
+
+LOGIM("--> qemu_system_debug_request() cpu->stopped = %d", cpu->stopped);
+    qemu_system_cosim_request();
+LOGIM("<-- qemu_system_debug_request()");
+
+}
+///////////////////////////////////////////////////////
+
 void cpu_handle_guest_debug(CPUState *cpu)
 {
+
+LOGIM("single step = %d", cpu->singlestep_enabled);
+
     if (replay_running_debug()) {
         if (!cpu->singlestep_enabled) {
             /*
@@ -311,8 +334,15 @@ void cpu_handle_guest_debug(CPUState *cpu)
             cpu_single_step(cpu, 0);
         }
     } else {
+
+LOGIM("--> gdb_set_stop_cpu() cpu = %p", cpu);
         gdb_set_stop_cpu(cpu);
+LOGIM("<-- gdb_set_stop_cpu() cpu = %p", cpu);
+
+LOGIM("--> qemu_system_debug_request()");
         qemu_system_debug_request();
+LOGIM("<-- qemu_system_debug_request()");
+
         cpu->stopped = true;
     }
 }
@@ -402,6 +432,9 @@ static void qemu_cpu_stop(CPUState *cpu, bool exit)
     g_assert(qemu_cpu_is_self(cpu));
     cpu->stop = false;
     cpu->stopped = true;
+
+LOGIM("==== cpu->stop = %d, cpu->stopped = %d", cpu->stop, cpu->stopped);
+
     if (exit) {
         cpu_exit(cpu);
     }
@@ -411,6 +444,9 @@ static void qemu_cpu_stop(CPUState *cpu, bool exit)
 void qemu_wait_io_event_common(CPUState *cpu)
 {
     qatomic_set_mb(&cpu->thread_kicked, false);
+
+LOGIM("==== cpu->stop = %d, cpu->stopped = %d", cpu->stop, cpu->stopped);
+
     if (cpu->stop) {
         qemu_cpu_stop(cpu, false);
     }
@@ -421,7 +457,7 @@ void qemu_wait_io_event(CPUState *cpu)
 {
     bool slept = false;
 
-LOGIM("IDLE = %d", cpu_thread_is_idle(cpu));
+LOGIM("idle = %d", cpu_thread_is_idle(cpu));
 
     while (cpu_thread_is_idle(cpu)) {
         if (!slept) {
@@ -466,8 +502,7 @@ void cpus_kick_thread(CPUState *cpu)
 void qemu_cpu_kick(CPUState *cpu)
 {
 
-LOGIM ("--> qemu_cond_broadcast() CPU = %p, HALT_COND", cpu);
-
+LOGIM ("====> qemu_cond_broadcast() + SLEEP CPU = %p, HALT_COND", cpu);
     qemu_cond_broadcast(cpu->halt_cond);
     if (cpus_accel->kick_vcpu_thread) {
         cpus_accel->kick_vcpu_thread(cpu);
@@ -513,25 +548,38 @@ void qemu_mutex_lock_iothread_impl(const char *file, int line)
     QemuMutexLockFunc bql_lock = qatomic_read(&qemu_bql_mutex_lock_func);
 
     g_assert(!qemu_mutex_iothread_locked());
+
+LOGIM("==== %s : %d ++++> LOCK()  GLOBAL_MUTEX = %p, locked = %d", file, line, &qemu_global_mutex, qemu_mutex_iothread_locked());
+
     bql_lock(&qemu_global_mutex, file, line);
     set_iothread_locked(true);
+
+LOGIM("<==== %s : %d <++++LOCK()  GLOBAL locked = %d", file, line, qemu_mutex_iothread_locked());
+
 }
 
 void qemu_mutex_unlock_iothread(void)
 {
     g_assert(qemu_mutex_iothread_locked());
+
     set_iothread_locked(false);
     qemu_mutex_unlock(&qemu_global_mutex);
 }
 
 void qemu_cond_wait_iothread(QemuCond *cond)
 {
+
+LOGIM("====> qemu_cond_wait() cond = %p, GLOBAL_MUTEX = %p", cond, &qemu_global_mutex);
     qemu_cond_wait(cond, &qemu_global_mutex);
+LOGIM("<==== qemu_cond_wait() cond = %p, GLOBAL", cond);
+
 }
 
 void qemu_cond_timedwait_iothread(QemuCond *cond, int ms)
 {
+LOGIM("====> qemu_cond_timedwait() cond = %p, GLOBAL_MUTEX = %p\n", cond, &qemu_global_mutex);
     qemu_cond_timedwait(cond, &qemu_global_mutex, ms);
+LOGIM("<==== qemu_cond_timedwait() cond = %p, GLOBAL_MUTEX\n", cond);
 }
 
 /* signal CPU creation */
@@ -575,6 +623,9 @@ void pause_all_vcpus(void)
 LOGIM("--> qemu_cpu_kick()");
             qemu_cpu_kick(cpu);
         }
+
+LOGIM("==== cpu->stop = %d", cpu->stop);
+
     }
 
     /* We need to drop the replay_lock so any vCPU threads woken up
@@ -600,7 +651,8 @@ void cpu_resume(CPUState *cpu)
 {
     cpu->stop = false;
     cpu->stopped = false;
-LOGIM("--> qemu_cpu_kick()");
+
+LOGIM("========> qemu_cpu_kick()");
     qemu_cpu_kick(cpu);
 }
 
@@ -614,6 +666,8 @@ void resume_all_vcpus(void)
 
     qemu_clock_enable(QEMU_CLOCK_VIRTUAL, true);
     CPU_FOREACH(cpu) {
+
+LOGIM("========> cpu_resume()");
         cpu_resume(cpu);
     }
 }
@@ -699,6 +753,8 @@ int vm_stop(RunState state)
         return 0;
     }
 
+LOGIM("----> do_vm_stop()");
+
     return do_vm_stop(state, true);
 }
 
@@ -746,7 +802,11 @@ int vm_prepare_start(bool step_pending)
 
 void vm_start(void)
 {
+LOGIM("----> vm_prepare_start() ----");
+
     if (!vm_prepare_start(false)) {
+
+LOGIM("----> resume_all_vcpus() ----");
         resume_all_vcpus();
     }
 }

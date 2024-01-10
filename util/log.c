@@ -47,7 +47,7 @@ int qemu_loglevel;
 static bool log_per_thread;
 static GArray *debug_regions;
 
-#if 1 ////////////// The IM log simple extension //////////////////
+#if 1 ////////////// The IM simple log (for debugging only) //////////////////
 
 static char *im_log_prefix = NULL;
 static FILE *im_log_fp     = NULL;
@@ -59,7 +59,10 @@ static void qemu_simple_log_enable (void)
         char *im_log_fname = (char*)malloc (strlen(im_log_prefix) + 64);
         sprintf (im_log_fname, "%s.%d.IMLOG", im_log_prefix, getpid ());
 
-        im_log_fp = fopen (im_log_fname, "w"); 
+        im_log_fp = fopen (im_log_fname, "w");
+        if (im_log_fp) {
+	    fprintf (stderr, "Unable to create LOGF = <%s>, FP = %p, errno = %d\n", im_log_fname, im_log_fp, errno);
+        } 
     }
 } 
 

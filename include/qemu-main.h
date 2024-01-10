@@ -8,39 +8,33 @@
 int qemu_default_main(void);
 extern int (*qemu_main)(void);
 
-////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 //
 //  COSIM stuff
 //
+///////////////////////////////////////////////////////////////
+
+#include <pthread.h>
+
+typedef struct COSIM_data_
+{
+    // notification fd's
+    int               rfd;
+    int               wfd;
+    pthread_mutex_t*  cosim_mutex;
+    pthread_cond_t*   cosim_cond;
+    /*
+     * It is temporary hack which works with one CPU only.
+     * It is not clear how to make CPU accssible from COSIM-triggered event handler.
+     * The diresct access of CPU_FOREACH causes linking error. 
+     */
+    void*               vcpu;
+
+    /////////////////////////////////////////////////
+    unsigned long long  state_pc;
+
+} COSIM_data_t;
 
 ///////////////////////////////////////////////////////////////
-//
-//  The prototype of QEMU-COSIM reportig API.
-//
-
-typedef struct COSIM_report_
-{
-    uint64_t pc_before; 
-    uint64_t pc_after;
-    int      cpu_index;
-    /////////////////////////////////////////////////////////////
-    void*    void_report_fn; 
-} COSIM_report_t;
-
-typedef int (*COSIM_report_inst_t) (COSIM_report_t *); 
-typedef int (*COSIM_validate_t)    (void);
-
-//
-//  The prototype of QEMU-COSIM registering API.
-//  Initially ... only one function (to report an instruction execution)
-//  exists
-//   
-typedef struct COSIM_register_
-{
-    COSIM_report_inst_t COSIM_insn_report_fn;
-    COSIM_validate_t    COSIM_validate_fn; 
-} COSIM_register_t;
-
-////////////////////////////////////////////////
 
 #endif /* QEMU_MAIN_H */

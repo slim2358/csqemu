@@ -30,6 +30,10 @@ void cpu_thread_signal_created(CPUState *cpu);
 void cpu_thread_signal_destroyed(CPUState *cpu);
 void cpu_handle_guest_debug(CPUState *cpu);
 
+//////////////// COSIM ////////////////////
+void cpu_handle_cosim_lockstep(CPUState *cpu);
+//////////////////////////////////////////
+
 /* end interface for cpus accelerator threads */
 
 bool qemu_in_vcpu_thread(void);

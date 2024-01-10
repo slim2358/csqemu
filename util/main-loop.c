@@ -36,9 +36,16 @@
 #include "qemu/log.h"
 #include "qom/object.h"
 
+#include "qemu-main.h"
+
+#include "hw/core/cpu.h"
+
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
+
+#include <poll.h>
+#include <sys/eventfd.h>
 
 #ifndef _WIN32
 
@@ -154,6 +161,8 @@ void qemu_notify_event(void)
 
 static GArray *gpollfds;
 
+///////////////  COSIM  ////////////////
+
 int qemu_init_main_loop(Error **errp)
 {
     int ret;
@@ -261,6 +270,8 @@ static void glib_pollfds_fill(int64_t *cur_timeout)
     int n;
 
     g_main_context_prepare(context, &max_priority);
+    
+LOGIM("gpollfds->len = %d, glib_n_poll_fds = %d, glib_pollfds_idx = %d", gpollfds->len, glib_n_poll_fds, glib_pollfds_idx);
 
     glib_pollfds_idx = gpollfds->len;
     n = glib_n_poll_fds;
@@ -271,7 +282,10 @@ static void glib_pollfds_fill(int64_t *cur_timeout)
         pfds = &g_array_index(gpollfds, GPollFD, glib_pollfds_idx);
         n = g_main_context_query(context, max_priority, &timeout, pfds,
                                  glib_n_poll_fds);
+
     } while (n != glib_n_poll_fds);
+
+LOGIM("gpollfds->len = %d, glib_n_poll_fds = %d, glib_pollfds_idx = %d", gpollfds->len, glib_n_poll_fds, glib_pollfds_idx);
 
     if (timeout < 0) {
         timeout_ns = -1;
@@ -287,7 +301,21 @@ static void glib_pollfds_poll(void)
     GMainContext *context = g_main_context_default();
     GPollFD *pfds = &g_array_index(gpollfds, GPollFD, glib_pollfds_idx);
 
+    struct pollfd *fds_lnx = (struct pollfd *)pfds;
+    int i = 0;
+    for (i = 0; i < glib_n_poll_fds; i++) {
+    
+        if (fds_lnx[i].revents != 0) {
+LOGIM("fd = %d, events = 0x%x, revents = 0x%x", fds_lnx[i].fd, fds_lnx[i].events, fds_lnx[i].revents);
+        }
+    }
+
+LOGIM ("====> g_main_context_check(), glib_poll_fds_idx = %d", glib_pollfds_idx);
+ 
     if (g_main_context_check(context, max_priority, pfds, glib_n_poll_fds)) {
+
+LOGIM ("====> g_main_context_dispatch()");
+
         g_main_context_dispatch(context);
     }
 }
@@ -299,21 +327,36 @@ static int os_host_main_loop_wait(int64_t timeout)
     GMainContext *context = g_main_context_default();
     int ret;
 
+    LOGIM("\n ==== ENTER loop-wait, tm = %ld ====", timeout);
+
     g_main_context_acquire(context);
 
     glib_pollfds_fill(&timeout);
 
+LOGIM ("=======> qemu_mutex_unlock_iothread()");
     qemu_mutex_unlock_iothread();
+LOGIM ("<======= qemu_mutex_unlock_iothread()");
+
     replay_mutex_unlock();
 
+LOGIM ("=======> qemu_poll_ns() nfds = %d", gpollfds->len);
     ret = qemu_poll_ns((GPollFD *)gpollfds->data, gpollfds->len, timeout);
+LOGIM ("<======= qemu_poll_ns() RET = %d", ret);
 
     replay_mutex_lock();
-    qemu_mutex_lock_iothread();
 
+LOGIM ("====(===> qemu_mutex_lock_iothread()");
+    qemu_mutex_lock_iothread();
+LOGIM ("<======= qemu_mutex_lock_iothread()");
+
+
+LOGIM ("====> glib_pollfds_poll()");
     glib_pollfds_poll();
+LOGIM ("<==== glib_pollfds_poll()");
 
     g_main_context_release(context);
+
+LOGIM("==== RET loop-wait (rc = %d) ====\n", ret);
 
     return ret;
 }
@@ -518,7 +561,9 @@ static int os_host_main_loop_wait(int64_t timeout)
 
     poll_timeout_ns = qemu_soonest_timeout(poll_timeout_ns, timeout);
 
+LOGIM ("====(2)===> qemu_mutex_unlock_iothread()");
     qemu_mutex_unlock_iothread();
+LOGIM ("<====(2)=== qemu_mutex_unlock_iothread()");
 
     replay_mutex_unlock();
 
@@ -526,7 +571,10 @@ static int os_host_main_loop_wait(int64_t timeout)
 
     replay_mutex_lock();
 
+LOGIM ("====(2)===> qemu_mutex_lock_iothread()");
     qemu_mutex_lock_iothread();
+LOGIM ("<====(2)=== qemu_mutex_lock_iothread()");
+
     if (g_poll_ret > 0) {
         for (i = 0; i < w->num; i++) {
             w->revents[i] = poll_fds[n_poll_fds + i].revents;

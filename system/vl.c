@@ -137,7 +137,18 @@
 #include "qemu/guest-random.h"
 #include "qemu/keyval.h"
 
+#ifdef CONFIG_EVENTFD
+#include <sys/eventfd.h>
+#endif
+#include <poll.h>
+
+#include  "qemu-main.h"
+#include "hw/core/cpu.h"
+
 #define MAX_VIRTIO_CONSOLES 1
+
+extern int           cosim_mode;
+extern COSIM_data_t  *COSIM_glue_data;
 
 typedef struct BlockdevOptionsQueueEntry {
     BlockdevOptions *bdo;
@@ -2727,6 +2738,148 @@ LOGIM("--> qemu_init_board()");
     }
 }
 
+///////////////////// COSIM /////////////////////////
+
+//  Similar to QIOChannelFDSource
+typedef struct QCosimFDSource_
+{
+    GSource  parent;
+    GPollFD  fd;
+    GIOCondition condition;
+} QCosimFDSource;
+
+///////////////////// COSIM /////////////////////////
+/*
+ * The set of callbacks below is used along with GLIB  API functions:
+ *   CHECK and DISPATCH.
+ * Essentially when CHECK returns not 0, DISPATCH is invoked.
+ * Both functions are associated with actvity on FILE descriptor.
+ * COSIM writes to this FD when CPU thread has to be woken up
+ * and the next RV instruction to be executed.
+ */ 
+static gboolean qemu_fd_sync_prepare (GSource *src G_GNUC_UNUSED, gint *tm)
+{
+    *tm = -1;
+    return FALSE;
+}
+
+static gboolean qemu_fd_sync_check (GSource *src)
+{
+    QCosimFDSource* ssrc = (QCosimFDSource*) src;
+    //    printf ("%s() ++++ FD = %d ++++\n", __FUNCTION__, ssrc->fd.fd);
+
+    return ssrc->fd.revents & ssrc->condition;     
+}
+
+/* 
+ * This function:
+ *  a) reads 8 bytes from the file descriptor.
+ *  b) sets  RUN_STATE_RUNNING and cpu->cosim_singlestep
+ *  c) invokes cpu_resume (cpu) which in turn sends a signal (COND_BROADCAST)
+ *     which wakes up CPU thread
+ */
+static gboolean qemu_fd_sync_dispatch (GSource *src, GSourceFunc cb, gpointer udata)
+{
+    QCosimFDSource* ssrc = (QCosimFDSource*) src;
+    // printf ("%s() ++++ src = %p, cb = %p, FD = %d ++++ \n", __FUNCTION__, src, cb, ssrc->fd.fd);
+
+    unsigned long long msg = 0;
+    int rc = read (ssrc->fd.fd,  (char*)&msg, 8);
+    //  printf ("%s() ++++ <-- READ (RC = %d) , msg = 0x%llx\n", __FUNCTION__, rc, msg); 
+
+    // SL: It is  more elegant not to use the static value here but how to pass CPU ?  UDATA ?  
+    CPUState *cpu = NULL;
+    // printf ("%s() ++++ cpu = %p ++++\n", __FUNCTION__, cpu);
+
+    runstate_set(RUN_STATE_RUNNING);
+
+LOGIM("<== READ (fd = %d) rc = %d ==> cpu_reaume() ", ssrc->fd.fd, rc);
+
+    CPU_FOREACH(cpu) {
+      // printf ("%s() +++++ CPU = %p --> CPU_RESUME, cpu->cosim_singlestep = %d\n", __FUNCTION__, cpu, cpu->cosim_singlestep);
+      cpu->cosim_singlestep = 1;
+      cpu_resume(cpu);
+    }
+    return TRUE;
+}
+
+/*
+ * The purpose of FINALIZE callabck is no known :-)
+ */
+static void qemu_fd_sync_finalize (GSource *src)
+{
+LOGIM (" ---- finalize ---- ");
+}
+
+///////////////  COSIM  ////////////////
+
+/*
+ * These functions are called on behalf of GLIB_CONTEXT_CHECK() and
+ * GLIB_CONTEXT_DISPATCH()
+ */
+static GSourceFuncs cosim_fd_cb_funcs = {
+    qemu_fd_sync_prepare,
+    qemu_fd_sync_check,
+    qemu_fd_sync_dispatch,
+    qemu_fd_sync_finalize
+};
+
+///////////////  COSIM  ////////////////
+
+/*
+ * The callback is empty. It should be called from DISPATCH callback.
+ * For now it is not necessary. DISPATCH callback takes care about everything.
+ */
+static void source_fd_callback (void)
+{
+LOGIM("----  source callback ----"); 
+}
+
+///////////////  COSIM /////////////////
+
+/*
+ * This function integrates FD from COSIM
+ * into GLIB event loop framework.
+ */
+static void qemu_cosim_set_sync (COSIM_data_t  *COSIM_gd)
+{
+    GSource *src = NULL;
+
+    /*
+     * All these dances are needed because of the visibility poblem - linking issues
+     */    
+    COSIM_glue_data = COSIM_gd;
+    int fd = COSIM_glue_data->rfd;
+
+    src = g_source_new (&cosim_fd_cb_funcs, sizeof (QCosimFDSource));
+
+    printf ("%s()  ---- FD ( from COSIM ) = %d \n", __FUNCTION__, fd);
+
+    /*
+      SRC = g_source_new(<4 functions> , sizeof (QIOChannelFDSource)) <--- or our type
+      g_source_add_poll ( SRC,  SSSource->FD ) 
+      g_source_set_back (SRC,  cb_for_dispactch)
+      g_source_attach
+    */
+
+    QCosimFDSource* ssrc = NULL;
+
+    ssrc = (QCosimFDSource*)src;
+    ssrc->condition  = G_IO_IN;
+    ssrc->fd.fd      = fd;
+    ssrc->fd.events  = G_IO_IN;
+    ssrc->fd.revents = 0; 
+
+    g_source_add_poll (src, &ssrc->fd);
+    
+    // For now USER DATA and NOTIFY are passed as NULL - maybe temporary.
+
+    g_source_set_callback (src, (GSourceFunc)source_fd_callback, NULL, NULL);
+    g_source_attach (src, NULL);
+}
+
+///////////////////// COSIM /////////////////////////
+
 void qemu_init(int argc, char **argv)
 {
     QemuOpts *opts;
@@ -2737,6 +2890,8 @@ void qemu_init(int argc, char **argv)
     MachineClass *machine_class;
     bool userconfig = true;
     FILE *vmstate_dump_file = NULL;
+
+printf ("QEMU:%s() ----- cosim_mode = %d\n", __FUNCTION__, cosim_mode);
 
     qemu_add_opts(&qemu_drive_opts);
     qemu_add_drive_opts(&qemu_legacy_drive_opts);
@@ -3667,6 +3822,16 @@ void qemu_init(int argc, char **argv)
         exit(1);
     }
     trace_init_file();
+
+#ifdef CONFIG_EVENTFD
+    if (cosim_mode) {
+
+#if 1
+        autostart = 0;
+#endif
+        qemu_cosim_set_sync (COSIM_glue_data);
+    }
+#endif
 
     qemu_init_main_loop(&error_fatal);
     cpu_timers_init();

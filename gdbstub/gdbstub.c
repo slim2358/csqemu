@@ -38,6 +38,8 @@
 #include "hw/boards.h"
 #endif
 
+#include "qemu/log.h"
+
 #include "sysemu/hw_accel.h"
 #include "sysemu/runstate.h"
 #include "exec/replay-core.h"
@@ -713,6 +715,8 @@ static int gdb_handle_vcont(const char *p)
     }
 
     gdbserver_state.signal = signal;
+
+LOGIM("--> gdb_continue_partial()");
     gdb_continue_partial(newstates);
     return res;
 }
@@ -922,6 +926,7 @@ static void handle_detach(GArray *params, void *user_ctx)
     if (!gdbserver_state.c_cpu) {
         /* No more process attached */
         gdb_disable_syscalls();
+      
         gdb_continue();
     }
     gdb_put_packet("OK");
@@ -1231,7 +1236,11 @@ static void handle_step(GArray *params, void *user_ctx)
         gdb_set_cpu_pc(get_param(params, 0)->val_ull);
     }
 
+
+LOGIM("GDB: --> cpu_single_step()");
     cpu_single_step(gdbserver_state.c_cpu, gdbserver_state.sstep_flags);
+
+LOGIM("GDB: --> gdb_continue()");
     gdb_continue();
 }
 
@@ -1276,6 +1285,8 @@ static void handle_v_cont(GArray *params, void *user_ctx)
         return;
     }
 
+
+LOGIM("--> gdb_handle_vcont()");
     res = gdb_handle_vcont(get_param(params, 0)->data);
     if ((res == -EINVAL) || (res == -ERANGE)) {
         gdb_put_packet("E22");

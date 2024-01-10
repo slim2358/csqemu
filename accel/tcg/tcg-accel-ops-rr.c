@@ -113,6 +113,8 @@ static void rr_wait_io_event(void)
 {
     CPUState *cpu;
 
+LOGIM ("<-- all_cpu_threads_idle() RC = %d", all_cpu_threads_idle()); 
+
     while (all_cpu_threads_idle()) {
         rr_stop_kick_timer();
 
@@ -177,6 +179,9 @@ static int rr_cpu_count(void)
     return cpu_count;
 }
 
+extern int              cosim_mode;
+extern COSIM_data_t     *COSIM_glue_data;
+
 /*
  * In the single-threaded case each vCPU is simulated in turn. If
  * there is more than a single vCPU we create a simple timer to kick
@@ -184,7 +189,6 @@ static int rr_cpu_count(void)
  * This is done explicitly rather than relying on side-effects
  * elsewhere.
  */
-
 static void *rr_cpu_thread_fn(void *arg)
 {
     Notifier force_rcu;
@@ -210,9 +214,9 @@ LOGIM ("<======= qemu_mutex_lock_iothread() CPU = %p", cpu);
     /* wait for initial kick-off after machine start */
     while (first_cpu->stopped) {
 
-LOGIM ("=======> qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
+LOGIM ("==> qemu_cond_wait_iothread() cpu->stopped = %d, HALT_COND", first_cpu->stopped);
         qemu_cond_wait_iothread(first_cpu->halt_cond);
-LOGIM ("<====== qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
+LOGIM ("<== qemu_cond_wait_iothread() CPU = %p, HALT_COND", first_cpu);
 
         /* process any pending work */
         CPU_FOREACH(cpu) {
@@ -266,7 +270,7 @@ LOGIM ("<======= qemu_mutex_lock_iothread() CPU = %p", cpu);
             cpu = first_cpu;
         }
 
-LOGIM ("---- cpu = %p, cpu_work_list_empy = %d, exit_request = %d", cpu, cpu_work_list_empty(cpu), cpu->exit_request);
+LOGIM ("---- cpu = %p, cpu_work_list_empty = %d, exit_request = %d", cpu, cpu_work_list_empty(cpu), cpu->exit_request);
 
         while (cpu && cpu_work_list_empty(cpu) && !cpu->exit_request) {
             /* Store rr_current_cpu before evaluating cpu_can_run().  */
@@ -305,6 +309,11 @@ LOGIM ("====> cpu_handle_quest_debug() cpu = %p, DBG", cpu);
                     cpu_handle_guest_debug(cpu);
 LOGIM ("<==== cpu_handle_quest_debug() cpu = %p", cpu);
 
+                    break;
+                } else if (r == EXCP_COSIM) {
+LOGIM ("====> cpu_handle_cosim_lockstep() cpu = %p, COSIM", cpu);
+	            cpu_handle_cosim_lockstep(cpu);
+LOGIM ("<==== cpu_handle_cosim_lockstep() cpu = %p", cpu);
                     break;
                 } else if (r == EXCP_ATOMIC) {
 
@@ -364,8 +373,23 @@ LOGIM ("------ OUT OF LOOP -- RETURN ------");
     return NULL;
 }
 
-extern int              cosim_mode;
-extern COSIM_report_t   *COSIM_report_ptr;
+///////////  COSIM  ////////////
+static void cosim_thread_go (void)
+{
+    if (cosim_mode) {
+        printf ("%s() ----> LOCK () lock = %p \n", __FUNCTION__, COSIM_glue_data->cosim_mutex);
+        pthread_mutex_lock (COSIM_glue_data->cosim_mutex);  
+        printf ("%s() <---- LOCK () lock = %p \n", __FUNCTION__, COSIM_glue_data->cosim_mutex);
+
+        printf ("%s() ---->  BCAST () cond = %p \n", __FUNCTION__, COSIM_glue_data->cosim_cond);
+        pthread_cond_broadcast (COSIM_glue_data->cosim_cond);
+
+        printf ("%s() ----> UNLOCK () lock = %p \n", __FUNCTION__, COSIM_glue_data->cosim_mutex);
+        pthread_mutex_unlock (COSIM_glue_data->cosim_mutex);  
+        printf ("%s() <---- UNLOCK () lock = %p \n", __FUNCTION__, COSIM_glue_data->cosim_mutex);
+     }
+}
+///////////  COSIM  ////////////
 
 void rr_start_vcpu_thread(CPUState *cpu)
 {
@@ -376,8 +400,17 @@ void rr_start_vcpu_thread(CPUState *cpu)
     g_assert(tcg_enabled());
     tcg_cpu_init_cflags(cpu, false);
 
+    ////////////   COSIM ////////////////
+    /*
+     * Linking CPu with cosim-specific data.
+     * Yet ... it s not clear how to deal with NCPU > 1 - TB figured out
+     */
     cpu->cosim_mode = cosim_mode;
-    cpu->cosim_data = (void*)COSIM_report_ptr;
+    cpu->cosim_data = (void*)COSIM_glue_data;
+    if (cosim_mode) {
+        COSIM_glue_data->vcpu = cpu;
+    }
+    ///////////////////////////////////
 
     if (!single_tcg_cpu_thread) {
         cpu->thread = g_new0(QemuThread, 1);
@@ -389,6 +422,9 @@ void rr_start_vcpu_thread(CPUState *cpu)
         qemu_thread_create(cpu->thread, thread_name,
                            rr_cpu_thread_fn,
                            cpu, QEMU_THREAD_JOINABLE);
+
+
+        cosim_thread_go ();
 
         single_tcg_halt_cond = cpu->halt_cond;
         single_tcg_cpu_thread = cpu->thread;
