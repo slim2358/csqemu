@@ -36,6 +36,7 @@
 #include "qemu/thread.h"
 
 #include "qemu/log.h"
+#include "qemu-main.h"
 
 #include "qemu/main-loop.h"
 #include "qemu/plugin.h"
@@ -302,16 +303,38 @@ bool cpu_can_run(CPUState *cpu)
 
 //////////////////  COSIM /////////////////////////////
 /*
+ * CPU thread wakes up COSIM thread;
+ * TBD: In case of NCPU > 1 this mechanzism to be reconsidered.
+ *      ?? QEMU_step() - per CPU or for all cpus. 
+ */
+static void vm_cosim_notify (CPUState *cpu)
+{
+    COSIM_data_t* pgd = (COSIM_data_t*)cpu->cosim_data; 
+    
+    // printf ("%s() ++++>  LOCK (mutex = %p ) \n", __FUNCTION__, pgd->cosim_mutex); 
+    pthread_mutex_lock (pgd->cosim_mutex);
+    // printf ("%s() <++++  LOCK (mutex = %p ) \n", __FUNCTION__, pgd->cosim_mutex); 
+    // printf ("%s() ++++>  COND_BROADCAST (cond = %p ) \n", __FUNCTION__, pgd->cosim_cond); 
+    pthread_cond_broadcast (pgd->cosim_cond);
+    pthread_mutex_unlock (pgd->cosim_mutex);
+}
+
+/*
  * Similar to cpu_handle_guest_debug() this function
- * processes new EXCP_COSIM and makes preparations to notify
- * COSIM that an instruction is executed
+ * processes new EXCP_COSIM and notifies
+ * COSIM that an instruction is executed.
  */ 
 void cpu_handle_cosim_lockstep(CPUState *cpu)
 {
     cpu->stopped = true;
 
+#if 0
 LOGIM("--> qemu_system_debug_request() cpu->stopped = %d", cpu->stopped);
     qemu_system_cosim_request();
+#else
+LOGIM("--> vm_cosim_notify() cpu->stopped = %d", cpu->stopped);
+    vm_cosim_notify (cpu);
+#endif
 LOGIM("<-- qemu_system_debug_request()");
 
 }
