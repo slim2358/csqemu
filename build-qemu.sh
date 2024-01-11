@@ -51,7 +51,7 @@ mkdir -p $PREFIX_FOR_INSTALL
 ls -la  $PREFIX_FOR_INSTALL
 
 echo "===================== Configure ..... ========================"
-./configure --prefix="${PREFIX_FOR_INSTALL}" --target-list="riscv64-linux-user,riscv64-softmmu"
+./configure --prefix="${PREFIX_FOR_INSTALL}" --target-list="riscv64-softmmu"
 
 if [ $? -ne 0 ];
 then
