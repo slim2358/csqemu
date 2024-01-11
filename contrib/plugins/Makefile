@@ -23,6 +23,7 @@ NAMES += hwprofile
 NAMES += cache
 NAMES += drcov
 NAMES += sandbox
+NAMES += cosim_state
 
 SONAMES := $(addsuffix .so,$(addprefix lib,$(NAMES)))
 
@@ -39,14 +40,13 @@ PLUGIN_CFLAGS += -I$(TOP_SRC_PATH)/include/qemu
 
 ifeq ($(Q_DYNLIB), y)
 BUILD_DIR=$(PWD)
+LD_PATH=$(BUILD_DIR)
+endif
 
 # Additional CFLAGS to compile extended plugins to access CPUArchState
 PLUGIN_CFLAGS += -I$(TOP_SRC_PATH)/include
 PLUGIN_CFLAGS += -I$(BUILD_DIR) -I$(TOP_SRC_PATH)/target/riscv
 PLUGIN_CFLAGS += -DNEED_CPU_H -DCONFIG_TARGET="<$(TARGET_DIRS)-config-target.h>"
-
-LD_PATH=$(BUILD_DIR)
-endif
 
 all: $(SONAMES)
 

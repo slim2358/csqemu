@@ -269,6 +269,8 @@ def eq_fields_for_fmts(flds_a, flds_b):
             return False
     return True
 
+def output_cosim_decl():
+    output('static void trans_cosim_prolog(DisasContext *ctx);')
 
 class Field:
     """Class representing a simple instruction field"""
@@ -542,6 +544,21 @@ class Format(General):
         output('static void ', self.extract_name(), '(DisasContext *ctx, ',
                self.base.struct_name(), ' *a, ', insntype, ' insn)\n{\n')
         self.output_fields(str_indent(4), lambda n: 'a->' + n)
+        output(str_indent(4))
+        output('ctx->cosim_ops.insn = insn;\n')
+        for n, f in self.fields.items():
+            if ( n == 'rs1'):
+                output(str_indent(4))
+                output('ctx->cosim_ops.rs1 = a->rs1;\n')
+            if ( n == 'rs2'):
+                output(str_indent(4))
+                output('ctx->cosim_ops.rs2 = a->rs2;\n')
+            if ( n == 'rs3'):
+                output(str_indent(4))
+                output('ctx->cosim_ops.rs3 = a->rs3;\n')
+            if ( n == 'rd'):
+                output(str_indent(4))
+                output('ctx->cosim_ops.rd = a->rd;\n')            
         output('}\n\n')
 # end Format
 
@@ -591,6 +608,8 @@ class Pattern(General):
         if not fmt_refs:
             # pattern fields last
             self.output_fields(ind, lambda n: 'u.f_' + arg + '.' + n)
+
+        output(ind, translate_prefix, '_cosim_prolog(ctx);\n')
 
         output(ind, 'if (', translate_prefix, '_', self.name,
                '(ctx, &u.f_', arg, ')) return true;\n')
@@ -1606,6 +1625,8 @@ def main():
                "#  pragma GCC diagnostic ignored \"-Wtypedef-redefinition\"\n",
                "#endif\n\n")
 
+    output_cosim_decl()
+    
     out_pats = {}
     for i in allpatterns:
         if i.name in out_pats:

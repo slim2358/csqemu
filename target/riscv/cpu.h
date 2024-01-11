@@ -126,6 +126,75 @@ typedef struct PMUCTRState {
     target_ulong irq_overflow_left;
 } PMUCTRState;
 
+// **********
+//
+// Structures for co-simulation:
+//    st_rvfi must match the System Verilog CPU state description
+//    cosim_args_t contains insn itself and packed register numbers in insn
+//
+// **********
+typedef struct {
+   uint64_t                 nret_id;
+   uint64_t                 cycle_cnt;
+   uint64_t                 order;
+   uint64_t                 insn;
+   uint8_t                  trap;
+   uint64_t                 cause;
+   uint8_t                  halt;
+   uint8_t                  intr;
+   uint32_t                 mode;
+   uint32_t                 ixl;
+   uint32_t                 dbg;
+   uint32_t                 dbg_mode;
+   uint64_t                 nmip;
+
+   uint64_t                 insn_interrupt;
+   uint64_t                 insn_interrupt_id;
+   uint64_t                 insn_bus_fault;
+   uint64_t                 insn_nmi_store_fault;
+   uint64_t                 insn_nmi_load_fault;
+
+   uint64_t                 pc_rdata;
+   uint64_t                 pc_wdata;
+
+   uint64_t                 rs1_addr;
+   uint64_t                 rs1_rdata;
+
+   uint64_t                 rs2_addr;
+   uint64_t                 rs2_rdata;
+
+   uint64_t                 rs3_addr;
+   uint64_t                 rs3_rdata;
+
+   uint64_t                 rd1_addr;
+   uint64_t                 rd1_wdata;
+
+   uint64_t                 rd2_addr;
+   uint64_t                 rd2_wdata;
+
+   uint64_t                 mem_addr;
+   uint64_t                 mem_rdata;
+   uint64_t                 mem_rmask;
+   uint64_t                 mem_wdata;
+   uint64_t                 mem_wmask;
+
+} st_rvfi_t;
+
+typedef struct cosim_args_s {
+    uint32_t insn;
+    union {
+        struct {
+            uint8_t  rs1 : 8;
+            uint8_t  rs2 : 8;
+            uint8_t  rs3 : 8;
+            uint8_t  rd  : 8;
+        } insn_regs;
+        uint32_t insn_p_regs;
+    }; 
+} cosim_args_t;
+//
+// ********* end of co-simulation types
+
 struct CPUArchState {
     target_ulong gpr[32];
     target_ulong gprh[32]; /* 64 top bits of the 128-bit registers */
@@ -380,6 +449,14 @@ struct CPUArchState {
     uint64_t kvm_timer_state;
     uint64_t kvm_timer_frequency;
 #endif /* CONFIG_KVM */
+
+    /* cosim_state - state for co-simulation verification;
+        NULL - if no co-sim;
+        otherwise a poiner to the state provided by the co-sim tool
+      cosim_args - insns registers numbers and insn itself 
+     */
+    cosim_args_t cosim_args;
+    st_rvfi_t   *cosim_state;
 };
 
 /*

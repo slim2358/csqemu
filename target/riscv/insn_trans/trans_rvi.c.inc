@@ -18,6 +18,23 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+static void trans_cosim_prolog(DisasContext *ctx)
+{
+    cosim_args_t cargs;
+    cargs.insn = ctx->cosim_ops.insn;
+    cargs.insn_regs.rs1 = ctx->cosim_ops.rs1;
+    cargs.insn_regs.rs2 = ctx->cosim_ops.rs2;
+    cargs.insn_regs.rs3 = ctx->cosim_ops.rs3;
+    cargs.insn_regs.rd  = ctx->cosim_ops.rd;
+
+    tcg_gen_st_i32(tcg_constant_i32(cargs.insn), tcg_env,
+                    offsetof(CPURISCVState, cosim_args.insn));
+
+    tcg_gen_st_i32(tcg_constant_i32(cargs.insn_p_regs), tcg_env,
+                    offsetof(CPURISCVState, cosim_args.insn_p_regs));
+
+}
+
 static bool trans_illegal(DisasContext *ctx, arg_empty *a)
 {
     gen_exception_illegal(ctx);

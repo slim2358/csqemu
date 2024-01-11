@@ -58,6 +58,14 @@ typedef enum {
     EXT_ZERO,
 } DisasExtend;
 
+typedef struct cosim_ops_s {
+    uint32_t insn;
+    uint8_t  rs1;
+    uint8_t  rs2;
+    uint8_t  rs3;
+    uint8_t  rd;
+} cosim_ops_t;
+
 typedef struct DisasContext {
     DisasContextBase base;
     target_ulong cur_insn_len;
@@ -116,6 +124,8 @@ typedef struct DisasContext {
     bool frm_valid;
     /* TCG of the current insn_start */
     TCGOp *insn_start;
+    /* Insn and Regiters for co-simulation */
+    cosim_ops_t cosim_ops;
 } DisasContext;
 
 static inline bool has_ext(DisasContext *ctx, uint32_t ext)
@@ -1227,9 +1237,15 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     uint16_t opcode16 = translator_lduw(env, &ctx->base, ctx->base.pc_next);
 
     ctx->ol = ctx->xl;
+
+    ctx->cosim_ops.rs1 = 0;
+    ctx->cosim_ops.rs2 = 0;
+    ctx->cosim_ops.rs3 = 0;
+    ctx->cosim_ops.rd  = 0;
+
     decode_opc(env, ctx, opcode16);
     ctx->base.pc_next += ctx->cur_insn_len;
-
+    
     /* Only the first insn within a TB is allowed to cross a page boundary. */
     if (ctx->base.is_jmp == DISAS_NEXT) {
         if (ctx->itrigger || !is_same_page(&ctx->base, ctx->base.pc_next)) {
